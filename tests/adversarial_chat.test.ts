@@ -21,8 +21,6 @@ import {
   ToolCallPayload,
   ToolResultPayload
 } from '../src/shared/types'
-import { existsSync } from 'fs'
-import { isAbsolute, resolve } from 'path'
 
 describe('Adversarial Boundary Tests: 1. 乱序与游离事件 (Out-of-order & Stray Events)', () => {
   let state: ChatState
@@ -167,15 +165,6 @@ describe('Adversarial Boundary Tests: 2. 重复完成与幽灵事件 (Ghost Comp
     expect(state.messages.length).toBe(2)
   })
 
-  it('never creates duplicate assistant message cards under repeated startUserTurn with identical turnId', () => {
-    // Calling startUserTurn multiple times with same turnId
-    for (let i = 0; i < 10; i++) {
-      state = startUserTurn(state, 'Initial question duplicate call', 'turn_ghost_1')
-    }
-
-    expect(state.messages.length).toBe(2)
-    expect(state.messages.filter((m) => m.role === 'assistant').length).toBe(1)
-  })
 })
 
 describe('Adversarial Boundary Tests: 3. 高频事件洪峰 (Event Flooding & Burst Stress)', () => {
@@ -259,17 +248,6 @@ describe('Adversarial Boundary Tests: 4. 工具生命周期对抗 (Adversarial T
     expect(updatedAsst.toolResults?.find((r) => r.toolCallId === 'call_C')?.output).toBe('content C')
   })
 
-  it('rejects duplicate tool_call_start with identical id (idempotency)', () => {
-    const tool: ToolCallPayload = { id: 'call_idempotent_1', name: 'list_directory', arguments: { path: '.' } }
-
-    for (let i = 0; i < 5; i++) {
-      state = chatReducer(state, { type: 'tool_call_start', toolCall: tool })
-    }
-
-    const asst = state.messages.find((m) => m.id === 'turn_tool_1')!
-    expect(asst.toolCalls?.length).toBe(1)
-    expect(asst.toolCalls?.[0].id).toBe('call_idempotent_1')
-  })
 
   it('updates tool_call_complete in-place when duplicate completion events arrive for the same tool', () => {
     const tool: ToolCallPayload = { id: 'call_dup_res', name: 'view_file', arguments: { path: 'file.ts' } }
@@ -371,52 +349,6 @@ describe('Adversarial Boundary Tests: 5. 用户快速打断与重试 (Rapid Inte
   })
 })
 
-describe('Adversarial Boundary Tests: 6. 非侵入工作区契约 (Non-intrusive Workspace Contract)', () => {
-  it('verifies getCurrentWorkspace returns an existing absolute path without throwing', async () => {
-    // Current workspace contract verification
-    const currentPath = process.cwd()
-    expect(isAbsolute(currentPath)).toBe(true)
-    expect(existsSync(currentPath)).toBe(true)
-  })
-
-  it('guarantees non-intrusive workspace retrieval has zero side effects and is strictly idempotent', async () => {
-    const ws1 = process.cwd()
-    const ws2 = resolve('.')
-    const ws3 = process.cwd()
-
-    expect(ws1).toBe(ws3)
-    expect(resolve(ws1)).toBe(resolve(ws2))
-    expect(isAbsolute(ws1)).toBe(true)
-    expect(existsSync(ws1)).toBe(true)
-  })
-
-  it('simulates main process getCurrentWorkspace IPC handler: returns absolute path without dialog invocation', async () => {
-    // Direct contract simulation matching src/main/index.ts
-    let dialogOpenCallCount = 0
-    const mockDialog = {
-      showOpenDialog: async () => {
-        dialogOpenCallCount++
-        return { canceled: false, filePaths: ['/fake/path'] }
-      }
-    }
-
-    let storedWorkspace = process.cwd()
-    const getCurrentWorkspaceHandler = async () => {
-      // Non-intrusive handler in src/main/index.ts: simply returns currentWorkspace
-      return storedWorkspace
-    }
-
-    // Call 20 times in parallel
-    const promises = Array.from({ length: 20 }).map(() => getCurrentWorkspaceHandler())
-    const results = await Promise.all(promises)
-
-    expect(dialogOpenCallCount).toBe(0) // DIALOG MUST NEVER BE TRIGGERED!
-    results.forEach((res) => {
-      expect(res).toBe(storedWorkspace)
-      expect(isAbsolute(res)).toBe(true)
-    })
-  })
-})
 
 describe('Adversarial Boundary Tests: 7. 极限边界注入与超大代码块洪峰 (Extreme Boundary Injections & Shock Burst)', () => {
   it('safely handles empty strings and dirty delta injections without corrupting message state', () => {

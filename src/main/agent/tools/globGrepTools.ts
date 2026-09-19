@@ -57,7 +57,15 @@ function patternToRegex(pattern: string): RegExp {
 
 export const globTool: AgentTool = {
   name: 'GlobTool',
+  aliases: ['glob', 'find_files', 'find_by_name'],
   description: 'Search for files by name pattern or wildcard (e.g. "*.ts", "src/**/*.tsx").',
+  searchHint: 'fast file search by pattern wildcard glob',
+  isReadOnly: () => true,
+  isConcurrencySafe: () => true,
+  maxResultSizeChars: 50_000,
+  alwaysLoad: true,
+  getActivityDescription: (args) => args?.pattern ? `Searching files "${args.pattern}"` : 'Searching files',
+  getToolUseSummary: (args) => args?.pattern ? `Glob: ${args.pattern}` : null,
   parameters: z.object({
     pattern: z.string().describe('The glob pattern to match files against'),
     path: z.string().optional().describe('The directory to search in. Defaults to workspace root.')
@@ -90,7 +98,15 @@ export const globTool: AgentTool = {
 
 export const grepTool: AgentTool = {
   name: 'GrepTool',
+  aliases: ['grep', 'search_text', 'grep_search'],
   description: 'Search file contents with regex. Returns matching lines and line numbers.',
+  searchHint: 'fast regex search across file contents',
+  isReadOnly: () => true,
+  isConcurrencySafe: () => true,
+  maxResultSizeChars: 50_000,
+  alwaysLoad: true,
+  getActivityDescription: (args) => args?.pattern ? `Grep "${args.pattern}"` : 'Searching contents',
+  getToolUseSummary: (args) => args?.pattern ? `Grep: ${args.pattern}` : null,
   parameters: z.object({
     pattern: z.string().describe('The regular expression pattern to search for'),
     path: z.string().optional().describe('Directory to search in. Defaults to workspace root.'),

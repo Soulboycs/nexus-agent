@@ -111,15 +111,14 @@
 }
 
 .nexus-markdown code:not(pre code) {
-  background-color: #f3f4f6;
+  background-color: #ececec;
   color: #18181b;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.375rem;
+  border: none;
+  padding: 0.12rem 0.38rem;
+  border-radius: 0.25rem;
   font-size: 0.85em;
   font-weight: 500;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
   margin: 0 0.15rem;
 }
 
@@ -170,3 +169,50 @@
   margin: 1.25rem 0;
 }
 
+/* ChatGPT-style Thinking Shimmer & Pulse Animations */
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.thinking-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #525252 0%,
+    #737373 25%,
+    #171717 50%,
+    #737373 75%,
+    #525252 100%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: thinking-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+
+
+/* 长时间线窗口化(计划 §8.2):屏外消息跳过 layout/paint;
+   必须配 contain-intrinsic-size,否则 scrollHeight 低估导致滚动跟随误判 */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}

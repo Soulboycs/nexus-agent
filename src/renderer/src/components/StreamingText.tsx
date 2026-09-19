@@ -7,6 +7,11 @@ interface StreamingTextProps {
   isStreaming?: boolean
   className?: string
   onComplete?: () => void
+  /**
+   * 直显模式(计划 §8.2 打字机分级):非聚焦 pane 跳过插值与 rAF 循环,
+   * content 变化直接进入渲染(合帧后 ~30/s 提交),消除多 pane 下的 rAF setState 风暴。
+   */
+  instant?: boolean
 }
 
 /** S2 心跳阈值：超过该时长未收到新 chunk 且仍在流式中 → 显示 [Receiving...] */
@@ -17,11 +22,12 @@ export const StreamingText: React.FC<StreamingTextProps> = ({
   content,
   isStreaming = false,
   className = '',
-  onComplete
+  onComplete,
+  instant = false
 }) => {
   const pacerRef = useRef<StreamPacer>(new StreamPacer())
   const [displayedText, setDisplayedText] = useState<string>(() => {
-    if (!isStreaming) return content || ''
+    if (!isStreaming || instant) return content || ''
     pacerRef.current.setTarget(content || '')
     return pacerRef.current.getDisplayed()
   })
@@ -33,6 +39,15 @@ export const StreamingText: React.FC<StreamingTextProps> = ({
   const hasStreamedRef = useRef(false)
 
   useEffect(() => {
+    if (instant) {
+      // 直显路径:取消任何已存在的循环,内容即状态
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+      setDisplayedText(content || '')
+      return
+    }
     const pacer = pacerRef.current
     pacer.setTarget(content || '')
 
@@ -55,31 +70,40 @@ export const StreamingText: React.FC<StreamingTextProps> = ({
     if (isStreaming) {
       hasStreamedRef.current = true
       if (!rafIdRef.current) startLoop(false)
-      return
+    } else {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+
+      if (!hasStreamedRef.current || pacer.isDone()) {
+        // 历史消息或已无积压：直接呈现终态
+        pacer.flush()
+        setDisplayedText(pacer.getDisplayed())
+        return
+      }
+
+      // 完成态平滑收尾（isFinished 路径）：~10 帧内排空剩余缓冲后彻底定稿。
+      // 该路径由此真正接线 — 修复 2026-09-17 审计发现的"死代码 + 测试测不到生产行为"。
+      startLoop(true)
     }
 
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current)
-      rafIdRef.current = null
+    // R1 修复（2026-09-18 代理A审计）：组件卸载或依赖变化时必须取消 rAF 循环，
+    // 否则父级在 finalize 时换装 MarkdownRenderer 卸载本组件后，循环残留继续
+    // 对已卸载组件 setState（每回合必触发的泄漏路径）。
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
     }
-
-    if (!hasStreamedRef.current || pacer.isDone()) {
-      // 历史消息或已无积压：直接呈现终态
-      pacer.flush()
-      setDisplayedText(pacer.getDisplayed())
-      return
-    }
-
-    // 完成态平滑收尾（isFinished 路径）：~10 帧内排空剩余缓冲后彻底定稿。
-    // 该路径由此真正接线 — 修复 2026-09-17 审计发现的"死代码 + 测试测不到生产行为"。
-    startLoop(true)
-  }, [content, isStreaming, onComplete])
+  }, [content, isStreaming, instant, onComplete])
 
   // S2 心跳：流式中断流/工具长执行超过阈值时提示 [Receiving...]，新数据到达即熄灭
   useEffect(() => {
     const lastUpdateRef = { time: performance.now() }
     setIsStalled(false)
-    if (!isStreaming) return
+    if (!isStreaming || instant) return
 
     const id = setInterval(() => {
       setIsStalled(performance.now() - lastUpdateRef.time > HEARTBEAT_STALL_MS)

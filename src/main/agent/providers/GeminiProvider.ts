@@ -1,6 +1,8 @@
 import { ILLMProvider, LLMMessage, LLMStreamChunk } from './LLMProvider'
 import { AgentTool } from '../tools/ToolRegistry'
 import { ProviderConfig } from '@shared/types'
+import { resolveToolDescription, toGeminiParameters, toolToJSONSchema } from '../utils/toolSchemas'
+import { fetchWithStreamingRetry } from '../utils/providerHttp'
 
 export class GeminiProvider implements ILLMProvider {
   constructor(private config: ProviderConfig) {}
@@ -20,11 +22,8 @@ export class GeminiProvider implements ILLMProvider {
 
     const functionDeclarations = tools.map((tool) => ({
       name: tool.name,
-      description: tool.description,
-      parameters: {
-        type: 'OBJECT',
-        properties: (tool.parameters as any)._def?.shape ? extractZodProperties(tool.parameters) : {}
-      }
+      description: resolveToolDescription(tool),
+      parameters: toGeminiParameters(toolToJSONSchema(tool))
     }))
 
     const systemInstruction = messages.filter(m => m.role === 'system').map(m => m.content).join('\n')
@@ -74,19 +73,18 @@ export class GeminiProvider implements ILLMProvider {
       body.tools = [{ functionDeclarations }]
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    const response = await fetchWithStreamingRetry({
+      url,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body),
+      provider: 'GeminiProvider',
+      model: this.config.model,
+      onStatusUpdate: (message) => onChunk({ statusUpdate: message }),
       signal
     })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Gemini API error (${response.status}): ${errorText}`)
-    }
 
     if (!response.body) {
       throw new Error('LLM response body is empty.')
@@ -137,16 +135,17 @@ export class GeminiProvider implements ILLMProvider {
             } else if (part.functionCall) {
               // Gemini doesn't stream function args piece by piece typically, it sends it whole in one chunk
               const tcIndex = toolCallsMap.size
+              const callId = `call_${Date.now()}_${tcIndex}`
               const argsStr = JSON.stringify(part.functionCall.args)
               toolCallsMap.set(tcIndex, {
-                id: `call_${Date.now()}_${tcIndex}`,
+                id: callId,
                 name: part.functionCall.name,
                 argsStr
               })
               onChunk({
-                toolCalls: [
+                completedToolCalls: [
                   {
-                    id: `call_${Date.now()}_${tcIndex}`,
+                    id: callId,
                     name: part.functionCall.name,
                     arguments: argsStr
                   }
@@ -180,17 +179,4 @@ export class GeminiProvider implements ILLMProvider {
       toolCalls: parsedToolCalls
     }
   }
-}
-
-function extractZodProperties(zodSchema: any): Record<string, any> {
-  const shape = zodSchema._def?.shape?.() || zodSchema._def?.shape || {}
-  const properties: Record<string, any> = {}
-  for (const [key, val] of Object.entries(shape)) {
-    const desc = (val as any).description || ''
-    properties[key] = {
-      type: 'STRING', // generalized representation
-      description: desc
-    }
-  }
-  return properties
 }

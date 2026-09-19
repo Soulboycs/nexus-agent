@@ -17,7 +17,7 @@ db.run(`
     id TEXT PRIMARY KEY,
     title TEXT,
     workDir TEXT NOT NULL,
-    permissionMode TEXT DEFAULT 'default',
+    permissionMode TEXT DEFAULT 'ask',
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL
   );
@@ -45,7 +45,7 @@ export interface SessionRecord {
 }
 
 export const sessionDb = {
-  create(id: string, workDir: string, title = 'New Session', permissionMode = 'default'): SessionRecord {
+  create(id: string, workDir: string, title = 'New Session', permissionMode = 'ask'): SessionRecord {
     const now = Date.now()
     const stmt = db.prepare(`
       INSERT INTO sessions (id, title, workDir, permissionMode, createdAt, updatedAt)

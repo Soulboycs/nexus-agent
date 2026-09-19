@@ -6,7 +6,7 @@
 [![CI/CD Push-to-Deploy](https://img.shields.io/badge/CI%2FCD-Push--to--Deploy-brightgreen)](https://github.com/Soulboycs/nexus-agent)
 [![Release](https://img.shields.io/badge/Release-v0.1.0--production-orange)](https://github.com/Soulboycs/nexus-agent)
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%201.4.2%20%7C%20Node%2022-blue)](https://bun.sh)
-[![Architecture](https://img.shields.io/badge/Architecture-1%3A1%20Claude%20Code-purple)](docs/SPEC.md)
+[![Architecture](https://img.shields.io/badge/Architecture-1%3A1%20Claude%20Code-purple)](docs/需求规格.md)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
@@ -51,10 +51,10 @@ nexus-agent/
 │   ├── setup_git_mirror.py        # 国内服务器 GitHub 镜像加速
 │   └── webhook-deploy.sh          # 生产级隔离式自动热重载
 ├── docs/                          # 规范驱动工程 (Spec + TDD) 完备审计文档
-│   ├── SPEC.md                    # 架构需求与契约定义
-│   ├── CONTRACT-*.md              # 状态机与网关接口契约
-│   ├── TEST-MATRIX.md             # 自动化测试矩阵
-│   └── EVIDENCE.md                # 真实执行证据链记录
+│   ├── 需求规格.md                # 架构需求与契约定义
+│   ├── 契约-*.md                  # 状态机与网关接口契约
+│   ├── 测试矩阵.md                # 自动化测试矩阵
+│   └── 证据链.md                # 真实执行证据链记录
 └── tests/                         # Bun 单元测试与集成测试套件
 ```
 
@@ -110,10 +110,10 @@ GitHub Webhook 将即时通知云服务器，**10 秒内全自动完成代码同
 ## 📜 规范驱动工程产物索引
 
 严格遵循 `evidence-driven-engineering` 质量标准：
-- [📋 需求与非目标: `docs/SPEC.md`](docs/SPEC.md)
-- [🗺️ TDD 分阶段路线图: `docs/PLAN.md`](docs/PLAN.md)
-- [📑 状态机与编排契约: `docs/CONTRACT-agent-orchestrator.md`](docs/CONTRACT-agent-orchestrator.md)
-- [📑 服务端与 WebSocket 契约: `docs/CONTRACT-server-gateway.md`](docs/CONTRACT-server-gateway.md)
-- [📊 高价值测试矩阵: `docs/TEST-MATRIX.md`](docs/TEST-MATRIX.md)
-- [🔍 测试真实性与质量审计: `docs/TEST-QUALITY-AUDIT.md`](docs/TEST-QUALITY-AUDIT.md)
-- [🧾 真实命令执行审计: `docs/EVIDENCE.md`](docs/EVIDENCE.md)
+- [📋 需求与非目标: `docs/需求规格.md`](docs/需求规格.md)
+- [🗺️ TDD 分阶段路线图: `docs/计划.md`](docs/计划.md)
+- [📑 状态机与编排契约: `docs/契约-Agent编排器与query状态机.md`](docs/契约-Agent编排器与query状态机.md)
+- [📑 服务端与 WebSocket 契约: `docs/契约-服务端网关与会话持久化.md`](docs/契约-服务端网关与会话持久化.md)
+- [📊 高价值测试矩阵: `docs/测试矩阵.md`](docs/测试矩阵.md)
+- [🔍 测试真实性与质量审计: `docs/测试质量审计.md`](docs/测试质量审计.md)
+- [🧾 真实命令执行审计: `docs/证据链.md`](docs/证据链.md)

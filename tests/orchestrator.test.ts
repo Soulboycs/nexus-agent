@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'bun:test'
 import { ToolRegistry } from '../src/main/agent/tools/ToolRegistry'
 import { ToolOrchestrator } from '../src/agent/core/ToolOrchestrator'
-import { viewFileTool, writeToFileTool } from '../src/main/agent/tools/fileTools'
+import { viewFileTool, writeToFileTool, listDirectoryTool } from '../src/main/agent/tools/fileTools'
+import { globTool, grepTool } from '../src/main/agent/tools/globGrepTools'
+import { docxReadTool } from '../src/main/agent/tools/docxTools'
 import { z } from 'zod'
 
 describe('ToolOrchestrator - Concurrency Partitioning & Execution Tests', () => {
@@ -104,5 +106,41 @@ describe('ToolOrchestrator - Concurrency Partitioning & Execution Tests', () => 
     expect(peakConcurrency).toBeGreaterThan(1)
     // Peak concurrency should not exceed max limit of 4
     expect(peakConcurrency).toBeLessThanOrEqual(4)
+  })
+
+  it('correctly partitions REAL built-in tools (view_file, list_directory, GlobTool, GrepTool, docx_read vs write_to_file)', () => {
+    const registry = new ToolRegistry()
+    registry.registerTool(viewFileTool)
+    registry.registerTool(listDirectoryTool)
+    registry.registerTool(globTool)
+    registry.registerTool(grepTool)
+    registry.registerTool(docxReadTool)
+    registry.registerTool(writeToFileTool)
+
+    const orchestrator = new ToolOrchestrator(registry)
+
+    // Sequence of real calls: 3 read tools, 1 write tool, 2 read tools
+    const batches = orchestrator.partition([
+      { id: '1', name: 'view_file', arguments: { filePath: 'a.txt' } },
+      { id: '2', name: 'list_directory', arguments: { dirPath: '.' } },
+      { id: '3', name: 'GlobTool', arguments: { pattern: '*.ts' } },
+      { id: '4', name: 'write_to_file', arguments: { filePath: 'out.txt', content: 'hello' } },
+      { id: '5', name: 'GrepTool', arguments: { pattern: 'test' } },
+      { id: '6', name: 'docx_read', arguments: { filePath: 'doc.docx' } }
+    ])
+
+    expect(batches.length).toBe(3)
+
+    // Batch 1: Real read-only tools combined concurrently
+    expect(batches[0].isConcurrencySafe).toBe(true)
+    expect(batches[0].calls.map((c) => c.name)).toEqual(['view_file', 'list_directory', 'GlobTool'])
+
+    // Batch 2: Real mutating write tool isolated serially
+    expect(batches[1].isConcurrencySafe).toBe(false)
+    expect(batches[1].calls.map((c) => c.name)).toEqual(['write_to_file'])
+
+    // Batch 3: Real read-only tools combined concurrently
+    expect(batches[2].isConcurrencySafe).toBe(true)
+    expect(batches[2].calls.map((c) => c.name)).toEqual(['GrepTool', 'docx_read'])
   })
 })

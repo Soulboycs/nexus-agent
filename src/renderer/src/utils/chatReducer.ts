@@ -97,6 +97,7 @@ export type ChatAction =
   | AgentEvent
   | { type: 'start_turn'; prompt: string; turnId: string }
   | { type: 'clear' }
+  | { type: 'load_history'; messages: ChatMessage[] }
 
 /**
  * Pure state reducer processing Agent streaming events in strict FIFO order.
@@ -109,6 +110,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
   if (action.type === 'clear') {
     return createInitialChatState()
+  }
+
+  if (action.type === 'load_history') {
+    return {
+      messages: (action.messages || []).map((msg) => ({
+        ...msg,
+        isStreaming: false
+      })),
+      activeTurnId: null
+    }
   }
 
   const activeId = state.activeTurnId

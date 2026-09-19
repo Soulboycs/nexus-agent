@@ -132,4 +132,22 @@ describe('ScrollFollower — 输入源检测式智能吸底', () => {
     el.dispatchEvent(new WheelEvent('wheel', { deltaY: -120 }))
     expect(follower.isFollowing()).toBe(true) // 监听已拆除，状态不再变化
   })
+
+  it('F1a: scrolling back to within 0-80px of bottom re-enables following (hysteresis band)', () => {
+    el = makeScrollEl()
+    follower = createScrollFollower(el)
+
+    // 用户上滚禁用跟随
+    el.dispatchEvent(new WheelEvent('wheel', { deltaY: -120 }))
+    expect(follower.isFollowing()).toBe(false)
+
+    // 用户回滚但停在距底 40px（迟滞带内，< 80 阈值）：应视为"回到底部"并恢复跟随。
+    // 阈值缩水（如 80→8）会把此处误判为仍未到底 → 跟随无法恢复。
+    scrollTo(el, SCROLL_HEIGHT - CLIENT_HEIGHT - 40)
+    expect(follower.isFollowing()).toBe(true)
+
+    el.scrollTop = 0
+    follower.follow()
+    expect(el.scrollTop).toBe(SCROLL_HEIGHT)
+  })
 })

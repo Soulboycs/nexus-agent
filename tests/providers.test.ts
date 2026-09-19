@@ -1,50 +1,69 @@
 import { describe, it, expect } from 'bun:test'
 import { createProvider } from '../src/main/agent/providers/ProviderFactory'
+import { OpenAICompatibleProvider } from '../src/main/agent/providers/LLMProvider'
+import { AnthropicProvider } from '../src/main/agent/providers/AnthropicProvider'
+import { GeminiProvider } from '../src/main/agent/providers/GeminiProvider'
+import { OllamaProvider } from '../src/main/agent/providers/OllamaProvider'
 import { MODEL_CATALOG, getModelDef } from '../src/shared/models'
 
-describe('ProviderFactory — unit', () => {
-  it('creates OpenAI provider', () => {
-    const p = createProvider({ providerType: 'openai', model: 'gpt-4o', apiKey: 'test' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
+/**
+ * 2026-09-18 垃圾测试清理重写：
+ * 原版本仅断言 isDefined + typeof chatStream —— 工厂把 anthropic 错配成
+ * gemini、deepseek 丢失 baseURL 重映射等真实故障全部无法发现（近永真）。
+ * 现改为 instanceof 分发断言 + 协议级 baseURL/apiKey 重映射验证。
+ */
+describe('ProviderFactory — 分发正确性与协议重映射', () => {
+  it('routes anthropic/gemini/ollama to their dedicated adapters (misrouting fails)', () => {
+    expect(
+      createProvider({ providerType: 'anthropic', model: 'claude-sonnet-4-5', anthropicApiKey: 't' } as any)
+    ).toBeInstanceOf(AnthropicProvider)
+    expect(
+      createProvider({ providerType: 'gemini', model: 'gemini-2.0-flash', geminiApiKey: 't' } as any)
+    ).toBeInstanceOf(GeminiProvider)
+    expect(
+      createProvider({ providerType: 'ollama', model: 'llama3.2' } as any)
+    ).toBeInstanceOf(OllamaProvider)
   })
 
-  it('creates DeepSeek provider', () => {
-    const p = createProvider({ providerType: 'deepseek', model: 'deepseek-chat', apiKey: 'test' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
+  it('forces DeepSeek onto the official endpoint regardless of caller-provided baseURL', () => {
+    const p = createProvider({
+      providerType: 'deepseek',
+      model: 'deepseek-chat',
+      apiKey: 'sk-test',
+      baseURL: 'http://attacker.example/v1' // 恶意/错误 baseURL 必须被强制覆盖
+    } as any) as any
+    expect(p).toBeInstanceOf(OpenAICompatibleProvider)
+    expect(p.config.baseURL).toBe('https://api.deepseek.com/v1')
+    expect(p.config.apiKey).toBe('sk-test')
   })
 
-  it('creates Anthropic provider', () => {
-    const p = createProvider({ providerType: 'anthropic', model: 'claude-sonnet-4-5', anthropicApiKey: 'test' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
+  it('applies Ollama local defaults (baseURL + apiKey fallback)', () => {
+    const p = createProvider({ providerType: 'ollama', model: 'llama3.2' } as any) as any
+    expect(p).toBeInstanceOf(OllamaProvider)
+    expect(p.config.baseURL).toBe('http://localhost:11434/v1')
+    expect(p.config.apiKey).toBe('ollama')
   })
 
-  it('creates Gemini provider', () => {
-    const p = createProvider({ providerType: 'gemini', model: 'gemini-2.0-flash', geminiApiKey: 'test' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
-  })
+  it('passes openai / openai-compatible / unknown types through to OpenAICompatible untouched', () => {
+    const custom = createProvider({
+      providerType: 'openai-compatible',
+      model: 'custom-model',
+      apiKey: 'k',
+      baseURL: 'http://localhost:8080/v1'
+    } as any) as any
+    expect(custom).toBeInstanceOf(OpenAICompatibleProvider)
+    expect(custom.config.baseURL).toBe('http://localhost:8080/v1')
 
-  it('creates Ollama provider', () => {
-    const p = createProvider({ providerType: 'ollama', model: 'llama3.2' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
-  })
-
-  it('falls back to OpenAI-compatible for unknown providerType', () => {
-    const p = createProvider({ providerType: 'openai-compatible', model: 'custom', apiKey: 'test', baseURL: 'http://localhost:8080' } as any)
-    expect(p).toBeDefined()
-    expect(typeof p.chatStream).toBe('function')
+    expect(
+      createProvider({ providerType: 'openai', model: 'gpt-4o', apiKey: 'k' } as any)
+    ).toBeInstanceOf(OpenAICompatibleProvider)
+    expect(
+      createProvider({ providerType: 'totally-unknown' } as any)
+    ).toBeInstanceOf(OpenAICompatibleProvider)
   })
 })
 
 describe('ModelCatalog — unit', () => {
-  it('has at least 10 models', () => {
-    expect(MODEL_CATALOG.length).toBeGreaterThanOrEqual(10)
-  })
-
   it('finds deepseek-chat model', () => {
     const m = getModelDef('deepseek-chat')
     expect(m).toBeDefined()

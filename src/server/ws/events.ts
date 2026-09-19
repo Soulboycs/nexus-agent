@@ -9,11 +9,9 @@ export type ChatState =
   | 'permission_pending'
 
 export type PermissionMode =
-  | 'default'
-  | 'acceptEdits'
+  | 'ask'
   | 'plan'
-  | 'bypassPermissions'
-  | 'dontAsk'
+  | 'bypass'
 
 export type TokenUsage = {
   input_tokens: number

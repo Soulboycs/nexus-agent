@@ -112,4 +112,121 @@ describe('Query AsyncGenerator State Machine Tests', () => {
 
     expect(approvalHandled).toBe(true)
   })
+
+  it('safely compensates missing tool results when aborted mid-flight (preventing API 400)', async () => {
+    const registry = new ToolRegistry()
+    const abortController = new AbortController()
+
+    registry.registerTool({
+      name: 'slow_task_1',
+      description: 'Slow task 1',
+      parameters: z.object({ id: z.number() }),
+      isReadOnly: () => true,
+      isConcurrencySafe: () => true,
+      execute: async () => {
+        // Abort during first tool execution
+        abortController.abort()
+        return 'done_1'
+      },
+    } as any)
+
+    registry.registerTool({
+      name: 'slow_task_2',
+      description: 'Slow task 2',
+      parameters: z.object({ id: z.number() }),
+      isReadOnly: () => false,
+      isConcurrencySafe: () => false,
+      execute: async () => 'done_2',
+    } as any)
+
+    const orchestrator = new ToolOrchestrator(registry)
+    const mockProvider = new MockLLMProvider()
+
+    // Model outputs 2 tool calls
+    mockProvider.queueResponse({
+      toolCalls: [
+        { id: 'call_1', name: 'slow_task_1', arguments: { id: 1 } },
+        { id: 'call_2', name: 'slow_task_2', arguments: { id: 2 } },
+      ],
+    })
+
+    const q = query({
+      messages: [{ role: 'user', content: 'Run both tasks' }],
+      toolRegistry: registry,
+      orchestrator,
+      provider: mockProvider,
+      workspaceRoot: '.',
+      signal: abortController.signal,
+    })
+
+    const events: AgentEvent[] = []
+    let terminalResult: any
+    while (true) {
+      const next = await q.next()
+      if (next.done) {
+        terminalResult = next.value
+        break
+      }
+      events.push(next.value)
+    }
+
+    expect(terminalResult.reason).toBe('aborted')
+    // Messages must contain the assistant message and matching tool results for both call_1 and call_2
+    const messages = terminalResult.messages
+    const assistantMsg = messages.find((m: any) => m.role === 'assistant')
+    expect(assistantMsg).toBeDefined()
+    expect(assistantMsg.tool_calls?.length).toBe(2)
+
+    const toolMessages = messages.filter((m: any) => m.role === 'tool')
+    expect(toolMessages.length).toBe(2)
+    const toolCallIds = toolMessages.map((m: any) => m.tool_call_id)
+    expect(toolCallIds).toContain('call_1')
+    expect(toolCallIds).toContain('call_2')
+
+    // call_2 was not run before abort, so its result must be compensated as cancelled
+    const call2Msg = toolMessages.find((m: any) => m.tool_call_id === 'call_2')
+    expect(call2Msg.content).toContain('cancelled')
+  })
+
+  it('safely halts when reaching maxTurns limit', async () => {
+    const registry = new ToolRegistry()
+    registry.registerTool({
+      name: 'loop_tool',
+      description: 'Loop tool',
+      parameters: z.object({}),
+      isReadOnly: () => true,
+      isConcurrencySafe: () => true,
+      execute: async () => 'loop',
+    } as any)
+
+    const orchestrator = new ToolOrchestrator(registry)
+    const mockProvider = new MockLLMProvider()
+
+    // Model keeps calling tool endlessly
+    for (let i = 0; i < 10; i++) {
+      mockProvider.queueResponse({
+        toolCalls: [{ id: `call_${i}`, name: 'loop_tool', arguments: {} }],
+      })
+    }
+
+    const q = query({
+      messages: [{ role: 'user', content: 'Loop forever' }],
+      toolRegistry: registry,
+      orchestrator,
+      provider: mockProvider,
+      workspaceRoot: '.',
+      maxTurns: 3,
+    })
+
+    let terminalResult: any
+    while (true) {
+      const next = await q.next()
+      if (next.done) {
+        terminalResult = next.value
+        break
+      }
+    }
+
+    expect(terminalResult.reason).toBe('max_turns')
+  })
 })

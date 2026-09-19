@@ -45,7 +45,10 @@ export class StreamPacer {
       // 增量追加
       const appendSlice = text.slice(this.targetText.length)
       const newGraphemes = splitIntoGraphemes(appendSlice)
-      this.targetGraphemes.push(...newGraphemes)
+      const CHUNK_SIZE = 16384
+      for (let i = 0; i < newGraphemes.length; i += CHUNK_SIZE) {
+        this.targetGraphemes.push(...newGraphemes.slice(i, i + CHUNK_SIZE))
+      }
       this.targetText = text
 
       // TTFT 0ms 旁路穿透：本 Turn 首字立刻上屏，不延迟
