@@ -78,16 +78,33 @@ export const taskCreateTool: AgentTool = {
     })
     task.proc = child
 
+    // Line-buffered push with carry: split on newline, keep the trailing
+    // partial line for the next chunk, and strip \r. Without the carry the
+    // trailing empty segment of each newline-terminated chunk would push
+    // blank entries into the ring buffer, halving its effective capacity.
+    let carry = ''
+    const pushLine = (line: string) => {
+      if (task.output.length >= MAX_LINES) task.output.shift()
+      task.output.push(line)
+    }
     const push = (chunk: Buffer | string) => {
-      const text = chunk.toString()
-      for (const line of text.split(/\r?\n/)) {
-        if (task.output.length >= MAX_LINES) task.output.shift()
-        task.output.push(line)
+      carry += chunk.toString()
+      const parts = carry.split(/\r?\n/)
+      carry = parts.pop() ?? ''
+      for (const part of parts) {
+        pushLine(part.replace(/\r$/, ''))
+      }
+    }
+    const flush = () => {
+      if (carry !== '') {
+        pushLine(carry.replace(/\r$/, ''))
+        carry = ''
       }
     }
     child.stdout?.on('data', push)
     child.stderr?.on('data', push)
     child.on('exit', (code) => {
+      flush()
       task.exitCode = code
       task.status = code === 0 ? 'completed' : code === null ? 'stopped' : 'failed'
     })

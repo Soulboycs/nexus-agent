@@ -284,6 +284,31 @@ describe('R6 — Task 系列（真实后台进程）', () => {
     expect(list).toContain(longId)
   }, 20000)
 
+  it('判别：环形缓冲无空目污染——1500 行输出后 lastLines=500 取回 500 真实行', async () => {
+    const ctx = { workspaceRoot: workspace } as any
+    // 单条命令产生 1500 行非空输出（有效历史深度 = 1000 行环形上限）
+    // 跨平台探针脚本：避免 PowerShell/bash 内联转义的平台差异
+    const probe = path.join(workspace, 'probe-1500.mjs')
+    const probeCode = 'for (let i = 1; i <= 1500; i++) console.log("L" + i);' + '\n'
+    fs.writeFileSync(probe, probeCode)
+    const cmd = `bun run ${probe}`
+    const created = String(await taskCreateTool.execute!({ command: cmd } as any, ctx))
+    const taskId = /task_[a-z0-9_]+/.exec(created)![0]
+
+    let output = ''
+    for (let i = 0; i < 100; i++) {
+      output = String(await taskOutputTool.execute!({ taskId, lastLines: 500 } as any, ctx))
+      if (output.includes('[completed]') && output.includes('L1500')) break
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    // 空目污染的旧实现此处非空行数 ~266；修复后必须恰好 500 行真实内容
+    const body = output.split('---')[2] || ''
+    const nonEmpty = body.split('\n').filter((l) => l.trim() !== '')
+    expect(nonEmpty.length).toBe(500)
+    expect(nonEmpty[0]).toBe('L1001')
+    expect(nonEmpty[499]).toBe('L1500')
+  }, 20000)
+
   it('负向：不存在的 taskId → 列表回显', async () => {
     const result = await taskOutputTool.execute!({ taskId: 'task_missing' } as any, { workspaceRoot: workspace } as any)
     expect(String(result)).toContain('Task not found: task_missing')
