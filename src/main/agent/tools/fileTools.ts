@@ -33,7 +33,7 @@ export const viewFileTool: AgentTool = {
     try {
       const stats = await fs.stat(fullPath)
       if (stats.isDirectory()) {
-        throw new Error(`Path "${filePath}" is a directory, not a file. Use list_directory instead.`)
+        throw new Error(`Path "${filePath}" is a directory, not a file. Use the LS tool instead.`)
       }
 
       const content = await fs.readFile(fullPath, 'utf-8')

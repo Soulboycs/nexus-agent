@@ -462,3 +462,23 @@ describe('layout-model — B17 new_tab 与 retargetTab(S8+ 内容选择落地页
     expect(m.retargetTabInLayout(st.layout, 'nope', { kind: 'new_tab' })).toBeNull()
   })
 })
+
+describe('layout-model — T 系列新增 kind 持久化接受(终端/浏览器/审查)', () => {
+  it('normalizeLayout 接受 terminal/browser/review target', async () => {
+    const m = await import('../src/renderer/src/workspace/layout-model')
+    const raw = {
+      root: { kind: 'group', group: { id: 'g', direction: 'horizontal',
+        children: [
+          { kind: 'pane', pane: { id: 'p1', tabs: [{ tabId: 't1', target: { kind: 'terminal' }, createdAt: 1 }], focusedTabId: 't1' } },
+          { kind: 'pane', pane: { id: 'p2', tabs: [{ tabId: 't2', target: { kind: 'browser', startUrl: 'https://x.com' }, createdAt: 2 }], focusedTabId: 't2' } },
+          { kind: 'pane', pane: { id: 'p3', tabs: [{ tabId: 't3', target: { kind: 'review' }, createdAt: 3 }], focusedTabId: 't3' } }
+        ], sizes: [1/3, 1/3, 1/3] } },
+      focusedPaneId: 'p2'
+    }
+    const out = m.normalizeLayout(raw)!
+    expect(out.focusedPaneId).toBe('p2')
+    const panes = m.collectAllPanes(out.root)
+    expect(panes.length).toBe(3)
+    expect(panes.map((p) => p.tabs[0].target.kind)).toEqual(['terminal', 'browser', 'review'])
+  })
+})

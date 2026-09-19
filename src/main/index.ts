@@ -7,6 +7,7 @@ import { createDefaultAgentEngine, AgentEngine } from './agent'
 import { SessionManager, type SessionEngineLike } from './agent/SessionManager'
 import { SendRateMeter } from './agent/utils/sendRateMeter'
 import { DocConflictDetector } from './agent/utils/docConflictDetector'
+import { installTerminalBridge } from './terminal/shellService'
 import { AgentEvent, ProviderConfig, FileTreeNode, PermissionMode, normalizePermissionMode } from '../shared/types'
 import { logger } from './utils/logger'
 import { registerDocxIpc } from './docx/docxIpc'
@@ -217,7 +218,8 @@ function createWindow(): void {
         : join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      webviewTag: true
     }
   })
 
@@ -335,6 +337,9 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
   createWindow()
   registerDocxIpc(() => mainWindow)
+  installTerminalBridge(ipcMain, (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:data', data)
+  }, () => currentWorkspace)
   await initAgent()
 
   // IPC: Agent Control

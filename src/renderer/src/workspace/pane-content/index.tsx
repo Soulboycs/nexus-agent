@@ -1,9 +1,12 @@
-import { MessageSquareText, FileText } from 'lucide-react'
+import { MessageSquareText, FileText, TerminalSquare, Globe, ListChecks } from 'lucide-react'
 import { registerTabKind } from '../tab-registry'
 import { useLayoutStore } from '../layout-store'
 import { ChatPane } from './ChatPane'
 import { WordPane } from './WordPane'
 import { NewTabPane } from './NewTabPane'
+import { TerminalPane } from './TerminalPane'
+import { BrowserPane } from './BrowserPane'
+import { ReviewPane } from './ReviewPane'
 
 /**
  * 内置 tab kind 注册(App 启动时调用一次;D1:新类型只加注册项,
@@ -41,5 +44,30 @@ export function registerBuiltinTabs(): void {
     title: () => '新建…',
     component: NewTabPane,
     sidebarSection: 'sessions'
+  })
+  registerTabKind({
+    kind: 'terminal',
+    title: () => '终端',
+    component: TerminalPane,
+    sidebarSection: 'sessions',
+    newCard: { title: '终端', icon: <TerminalSquare className="w-5 h-5" />, description: '命令行 Shell' },
+    onCreateInTab: (tabId) => useLayoutStore.getState().retargetTab(tabId, { kind: 'terminal' })
+  })
+  registerTabKind({
+    kind: 'browser',
+    title: (t) => (t.startUrl ? String(t.startUrl).replace(/^https?:\/\//, '').slice(0, 24) : '浏览器'),
+    component: BrowserPane,
+    sidebarSection: 'docs',
+    newCard: { title: '浏览器', icon: <Globe className="w-5 h-5" />, description: '内置网页浏览' },
+    onCreateInTab: (tabId) =>
+      useLayoutStore.getState().retargetTab(tabId, { kind: 'browser', startUrl: 'https://example.com' })
+  })
+  registerTabKind({
+    kind: 'review',
+    title: (t) => (t.workspacePath ? '审查 · ' + String(t.workspacePath).split(/[\/]/).pop() : '审查'),
+    component: ReviewPane,
+    sidebarSection: 'docs',
+    newCard: { title: '审查', icon: <ListChecks className="w-5 h-5" />, description: '文件与会话概览' },
+    onCreateInTab: (tabId) => useLayoutStore.getState().retargetTab(tabId, { kind: 'review' })
   })
 }

@@ -51,7 +51,18 @@ function registerDocPath(wcId: number, rawPath: unknown): void {
   if (typeof rawPath !== 'string' || !rawPath) return
   try {
     const pathMod = require('path') as typeof import('path')
-    allowDocRoot(pathMod.dirname(pathMod.resolve(rawPath)))
+    const abs = pathMod.resolve(rawPath)
+    allowDocRoot(pathMod.dirname(abs))
+    // §6.3 canonical 接线:realpath 消解 8.3 短名/软链/规范大小写,注册双 key(语法形+canonical)
+    import('fs/promises')
+      .then((fs) => fs.realpath(abs))
+      .then((real) => {
+        for (const k of new Set([normalizeKeyPath(rawPath), normalizeKeyPath(real)])) {
+          wcIdByDocPath.set(k, wcId)
+          docPathsByWcId.get(wcId)?.add(k)
+        }
+      })
+      .catch(() => {})
   } catch {}
   const key = normalizeKeyPath(rawPath)
   wcIdByDocPath.set(key, wcId)
@@ -224,8 +235,18 @@ export async function runDocsCommandForPath(
   docPath: string,
   payload: unknown
 ): Promise<unknown> {
-  const key = normalizeKeyPath(docPath)
-  const wcId = wcIdByDocPath.get(key)
+  let key = normalizeKeyPath(docPath)
+  let wcId = wcIdByDocPath.get(key)
+  if (!wcId) {
+    // canonical 兜底:语法形未命中 → 尝试 realpath 后再查(短名/软链变体)
+    try {
+      const pathMod = require('path') as typeof import('path')
+      const fs = await import('fs/promises')
+      const real = await fs.realpath(pathMod.resolve(docPath))
+      key = normalizeKeyPath(real)
+      wcId = wcIdByDocPath.get(key)
+    } catch {}
+  }
   if (!wcId) {
     throw new Error(`NO_LIVE_EDITOR_FOR_PATH:${docPath}`)
   }

@@ -137,10 +137,13 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
           }
         }
       } else if (event.type === 'tool_call_complete') {
+        // R5 正名双覆盖：Bash/Read/Write/Edit/Glob/Grep/LS + 旧名
+        const n = event.result.name
         if (
-          event.result.name.includes('file') ||
-          event.result.name === 'run_command' ||
-          event.result.name.startsWith('docx_')
+          ['Bash', 'run_command', 'Write', 'Edit', 'Read', 'Grep', 'Glob', 'LS'].includes(n) ||
+          n.includes('file') ||
+          n.includes('File') ||
+          n.startsWith('docx_')
         ) {
           host.notifyFilesDirty()
         }

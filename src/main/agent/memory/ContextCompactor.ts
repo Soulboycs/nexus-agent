@@ -12,11 +12,15 @@ export const DEFAULT_PRESERVE_RECENT_ROUNDS = 2
 export const TOOL_RESULT_CLEARED_MESSAGE = '[Old tool result content cleared]'
 
 export const COMPACTABLE_TOOLS = new Set<string>([
+  // 匹配用 toLowerCase()，因此正名键写小写形式（R5 修正：'Bash' 大写键无效）
+  'read',
+  'write',
+  'edit',
+  'webfetch',
   'view_file',
   'read_file',
   'cat',
   'run_command',
-  'Bash',
   'bash',
   'powershell',
   'exec',
@@ -274,7 +278,7 @@ export class ContextCompactor {
           toolsUsed.push(tc.function.name)
         }
       } else if (msg.role === 'tool' && msg.content) {
-        if (msg.name === 'write_to_file' || msg.name === 'replace_file_content') {
+        if (msg.name && ['write_to_file', 'replace_file_content', 'Write', 'Edit'].includes(msg.name)) {
           keyActions.push(`Modified file via ${msg.name}`)
         }
       }

@@ -1,5 +1,6 @@
 import React from 'react'
 import type { TabTarget } from './layout-model'
+import type { MentionCandidate } from '../utils/mentions'
 
 /**
  * Tab 内容注册表(计划 §4.2,D1:pane 不分类型)。
@@ -31,6 +32,11 @@ export interface TabKindRegistration<T extends TabTarget = TabTarget> {
   }
   /** 卡片点击 → 该 tab 变成此 kind 的新实例(chat=新建会话;word=进入文档选择) */
   onCreateInTab?: (tabId: string) => void
+  /**
+   * §6.7 @ 提及扩展点:声明后,该 kind 的实例可作为 @ 候选被解析
+   * (内置 chat/word 候选由 ChatPane 聚合;插件 kind 经此接入)
+   */
+  mentionSource?: () => MentionCandidate[]
 }
 
 const registrations = new Map<string, TabKindRegistration<any>>()
@@ -54,6 +60,15 @@ export function getNewTabCards(): Array<{ kind: TabTarget['kind']; card: NonNull
 
 export function fireCreateInTab(kind: TabTarget['kind'], tabId: string): void {
   registrations.get(kind)?.onCreateInTab?.(tabId)
+}
+
+export function collectRegistryMentions(): MentionCandidate[] {
+  const out: MentionCandidate[] = []
+  for (const reg of registrations.values()) {
+    if (!reg.mentionSource) continue
+    for (const c of reg.mentionSource()) out.push(c)
+  }
+  return out
 }
 
 export function getTabTitle(target: TabTarget): string {

@@ -13,6 +13,9 @@ export type TabTarget =
   | { kind: 'word'; path: string }
   /** 内容选择落地页(分割/新建的初始态,由用户决定变成什么) */
   | { kind: 'new_tab' }
+  | { kind: 'terminal' }
+  | { kind: 'browser'; startUrl?: string }
+  | { kind: 'review'; workspacePath?: string }
 
 export type LayoutDirection = 'horizontal' | 'vertical'
 export type SplitPosition = 'left' | 'right' | 'top' | 'bottom'
@@ -568,7 +571,8 @@ function isValidTarget(t: unknown): t is TabTarget {
   const o = t as Record<string, unknown>
   if (o.kind === 'chat') return typeof o.sessionId === 'string' && o.sessionId.length > 0
   if (o.kind === 'word') return typeof o.path === 'string' && o.path.length > 0
-  if (o.kind === 'new_tab') return true
+  if (o.kind === 'new_tab' || o.kind === 'terminal' || o.kind === 'review') return true
+  if (o.kind === 'browser') return o.startUrl === undefined || typeof o.startUrl === 'string'
   return false
 }
 

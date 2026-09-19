@@ -154,7 +154,7 @@ export function createToolSearchTool(
       const { matches, exactSelect } = manager.search(query, allTools)
 
       if (matches.length === 0) {
-        return `No matching tools found for query: "${query}". Call list_directory or view_file to check project structure.`
+        return `No matching tools found for query: "${query}". Call LS or Read to check project structure.`
       }
 
       let res = exactSelect

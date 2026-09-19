@@ -14,7 +14,8 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
   const [argsText, setArgsText] = useState(() => JSON.stringify(request.arguments ?? {}, null, 2))
   const [argsError, setArgsError] = useState<string | null>(null)
 
-  const isCommand = request.toolName === 'run_command'
+  // R5 正名双覆盖：Bash 正名 + run_command 旧名
+  const isCommand = ['Bash', 'run_command', 'bash', 'PowerShell'].includes(request.toolName)
   const commandStr = isCommand ? String(request.arguments.command || '') : ''
 
   /**

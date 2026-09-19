@@ -71,9 +71,10 @@ export class SandboxGuard {
     const normalizedResolved = IS_WINDOWS ? resolved.toLowerCase() : resolved
     const forwardSlashes = normalizedResolved.replace(/\\/g, '/')
 
-    // 0. 动态放行目录(R14):用户已打开的文档目录(集中管理,全部实例共享)
+    // 0. 动态放行目录(R14):用户已打开的文档目录(集中管理,全部实例共享)。
+    //    置于敏感文件检查之后:放行不豁免 .ssh/id_rsa 等敏感路径保护。
     for (const root of extraAllowedRoots) {
-      const rootNorm = (IS_WINDOWS ? root.toLowerCase() : root).replace(/[\\]+/g, '/')
+      const rootNorm = (IS_WINDOWS ? root.toLowerCase() : root).replace(/\\/g, '/')
       if (forwardSlashes.startsWith(rootNorm.endsWith('/') ? rootNorm : rootNorm + '/')) {
         return { passed: true }
       }

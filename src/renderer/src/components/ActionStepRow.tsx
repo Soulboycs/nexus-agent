@@ -38,32 +38,45 @@ export function resolveActionTitle(name: string, args: any): string {
 
   const rawPath = args?.filePath || args?.path || args?.AbsolutePath || ''
   const filename = rawPath ? String(rawPath).split(/[/\\]/).pop() : ''
-  const nameLower = name.toLowerCase()
+  // R5 正名 → 旧语义名（下游展示分支按旧名编写，双名兼容）
+  const legacyName =
+    (
+      {
+        Read: 'view_file',
+        Write: 'write_to_file',
+        Edit: 'replace_file_content',
+        Bash: 'run_command',
+        Glob: 'find_by_name',
+        Grep: 'grep_search',
+        LS: 'list_directory',
+      } as Record<string, string>
+    )[name] ?? name
+  const nameLower = legacyName.toLowerCase()
 
-  if (name === 'view_file' || name === 'read_file') {
+  if (legacyName === 'view_file' || legacyName === 'read_file') {
     return filename ? `查看文件 ${filename}` : '查看代码文件'
   }
-  if (name === 'replace_file_content' || name === 'edit_file') {
+  if (legacyName === 'replace_file_content' || legacyName === 'edit_file') {
     return filename ? `修改文件 ${filename}` : '修改代码实现'
   }
-  if (name === 'write_to_file' || name === 'write_file') {
+  if (legacyName === 'write_to_file' || legacyName === 'write_file') {
     return filename ? `写入文件 ${filename}` : '创建或更新文件'
   }
-  if (name === 'run_command' || name === 'execute_command' || name === 'bash') {
+  if (legacyName === 'run_command' || legacyName === 'execute_command' || legacyName === 'bash') {
     const cmd = args?.command || args?.CommandLine || ''
     if (cmd.includes('test')) return `运行测试: ${cmd}`
     if (cmd.includes('build')) return `编译构建: ${cmd}`
     return cmd ? `执行命令: ${cmd}` : '执行终端命令'
   }
-  if (name === 'grep_search') {
+  if (legacyName === 'grep_search') {
     const query = args?.query || args?.Query || ''
     return query ? `检索代码: ${query}` : '搜索代码内容'
   }
-  if (name === 'find_by_name' || name === 'glob_find' || nameLower.includes('glob')) {
+  if (legacyName === 'find_by_name' || legacyName === 'glob_find' || nameLower.includes('glob')) {
     const pattern = args?.pattern || args?.Pattern || ''
     return pattern ? `检索工作区文件: ${pattern}` : '扫描工作区文件'
   }
-  if (name === 'list_directory' || name === 'list_dir') {
+  if (legacyName === 'list_directory' || legacyName === 'list_dir') {
     const dir = filename || args?.directory || args?.dir || args?.DirectoryPath || ''
     return dir ? `浏览目录 ${dir}` : '查看目录结构'
   }
@@ -82,7 +95,20 @@ function resolveCategoryIcon(name: string, args: any, status: 'running' | 'compl
   const rawPath = args?.filePath || args?.path || args?.AbsolutePath || ''
   const filename = rawPath ? String(rawPath).split(/[/\\]/).pop()?.toLowerCase() : ''
   const fullPathLower = String(rawPath).toLowerCase()
-  const nameLower = name.toLowerCase()
+  // R5 正名 → 旧语义名（下游展示分支按旧名编写，双名兼容）
+  const legacyName =
+    (
+      {
+        Read: 'view_file',
+        Write: 'write_to_file',
+        Edit: 'replace_file_content',
+        Bash: 'run_command',
+        Glob: 'find_by_name',
+        Grep: 'grep_search',
+        LS: 'list_directory',
+      } as Record<string, string>
+    )[name] ?? name
+  const nameLower = legacyName.toLowerCase()
 
   // 1. 显式绿色/翡翠闪电 (⚡)：最终修复落地、核心命令执行
   if (
@@ -301,15 +327,12 @@ export const ActionStepRow: React.FC<ActionStepRowProps> = ({
           </div>
 
           {/* Diff preview for modifications */}
-          {(toolCall.name === 'replace_file_content' ||
-            toolCall.name === 'edit_file' ||
-            toolCall.name === 'write_to_file' ||
-            toolCall.name === 'write_file') && (
+          {(['replace_file_content', 'edit_file', 'write_to_file', 'write_file', 'Edit', 'Write'].includes(toolCall.name)) && (
             <div className="space-y-1">
               <div className="text-[10px] uppercase font-semibold text-neutral-400">
                 修改目标：{String((toolCall.arguments as any)?.filePath || (toolCall.arguments as any)?.path || (toolCall.arguments as any)?.TargetFile || '')}
               </div>
-              {toolCall.name === 'replace_file_content' || toolCall.name === 'edit_file' ? (
+              {['replace_file_content', 'edit_file', 'Edit'].includes(toolCall.name) ? (
                 <div className="flex flex-col gap-1 font-mono text-[11px]">
                   <pre className="text-rose-600 bg-rose-50/80 border border-rose-200/80 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap">
                     - {String((toolCall.arguments as any)?.targetContent || (toolCall.arguments as any)?.TargetContent || '')}
