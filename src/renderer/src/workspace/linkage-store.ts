@@ -122,3 +122,28 @@ export const useLinkageStore = create<LinkageState>()((set, get) => ({
     set({ pathToTab: {}, lastTouch: {}, updatedPaths: {}, followPaused: {}, suppressedPaths: {}, panePreference: {} })
   }
 }))
+
+// ── 持久化(§4.4 LinkageState 独立 key):记忆/抑制/落位偏好重启保留;路由表由 tab 挂载重建 ──
+const LS_KEY = 'nexus_linkage_v1'
+const hasLS = typeof globalThis !== 'undefined' && (globalThis as any).localStorage
+if (hasLS) {
+  try {
+    const raw = (globalThis as any).localStorage.getItem(LS_KEY)
+    if (raw) {
+      const d = JSON.parse(raw)
+      useLinkageStore.setState({
+        lastTouch: d.lastTouch ?? {},
+        suppressedPaths: d.suppressedPaths ?? {},
+        panePreference: d.panePreference ?? {}
+      })
+    }
+  } catch {}
+  useLinkageStore.subscribe((s) => {
+    try {
+      ;(globalThis as any).localStorage.setItem(
+        LS_KEY,
+        JSON.stringify({ lastTouch: s.lastTouch, suppressedPaths: s.suppressedPaths, panePreference: s.panePreference })
+      )
+    } catch {}
+  })
+}

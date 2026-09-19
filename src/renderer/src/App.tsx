@@ -169,7 +169,7 @@ export default function App() {
     const offApprover = installAutoApprover(permissionModeRef)
     // 性能钩子(dev only,§8.3):帧探针供 Playwright 读取验收口径
     let probe: ReturnType<typeof installFrameProbe> | null = null
-    if (import.meta.env.DEV) probe = installFrameProbe()
+    if (import.meta.env.DEV || localStorage.getItem('nexus_perf_probe') === '1') probe = installFrameProbe()
     return () => {
       offPipe?.()
       offApprover?.()

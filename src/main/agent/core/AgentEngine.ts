@@ -464,6 +464,8 @@ CRITICAL RULE FOR WORD: NEVER use "Bash" (formerly run_command) or Python script
       permissionEngine: this.permissionEngine,
       sandboxGuard: this.sandboxGuard,
       docConflict: this.docConflict,
+      getPermissionMode: () => this.permissionMode,
+      setPermissionMode: (mode) => this.setPermissionMode(mode),
       maxTurns: this.maxSteps,
       signal,
       onApprovalRequired: (req) => this.handleApprovalRequired(req),

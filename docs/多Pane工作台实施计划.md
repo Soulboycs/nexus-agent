@@ -445,7 +445,7 @@ function useSessionChat(sessionId: string) {
 
 ## 10. 分阶段实施计划(v2)
 
-### 阶段一:地基——多会话并发 + 布局树(含性能地基)`[ ]`
+### 阶段一:地基——多会话并发 + 布局树(含性能地基)`[x]`
 
 **前置决策**:R10 硬件加速(恢复 GPU 首选,查明当初禁用原因并回归)。
 
@@ -464,7 +464,7 @@ function useSessionChat(sessionId: string) {
 
 **验收**:8 会话并发流式互不串扰(Profiler 验证);按钮 split/关闭/收起正常;拖宽 commit 后重启宽度恢复;连续 split 不 remount 已有 pane;重启布局恢复;`npm run typecheck` + 全量 vitest 零回归;新增单测:layout-model 全 mutation(含 R1/R1b remount、最后可见 pane 守门)、SessionManager 并发、事件路由与合帧(含 FIFO 屏障顺序)、persistIndex 原子性;性能指标四项脚本跑通。
 
-### 阶段二:Snap 拖拽 + 左右互拖 `[ ]`
+### 阶段二:Snap 拖拽 + 左右互拖 `[x]`
 
 13. 新增依赖 `@dnd-kit/core`;单一 DndContext + DragOverlay + 统一 DragPayload(§5.1);
 14. 拖源:侧栏条目(target)、tab chip;落点四类 + Snap 预览(§5.2:overlay 两层、指针选落点/中心点定位、collision 无兜底、resolveSplitDropPosition 纯函数);
@@ -473,7 +473,7 @@ function useSessionChat(sessionId: string) {
 
 **验收**:拖侧栏会话→预览→吸附成 pane→接上自己的流;pane 互拖 split/堆叠/重排;任意 tab 拖回对应分区收回(会话后台继续跑);拖拽全程 60fps(拖拽期间 layout store 零写入验证)。
 
-### 阶段三:零配置联动 `[ ]`
+### 阶段三:零配置联动 `[x]`
 
 17. **前置硬门槛(G6/R11,§6.4)**:docsBridge path 寻址(禁跨文档覆写)+ mcp-bridge 实例端 targetPath 过滤 + `__aidocs` per-instance 注册 + FileChangeHub 通知枢纽;
 18. `shared/paths.ts` 规范化契约落地:三入口统一 canonical(§6.3/R12);
@@ -488,7 +488,7 @@ function useSessionChat(sessionId: string) {
 
 **验收**:会话改论文→文档 pane 自动开/实时跟随/后台更新亮角标;10 文档并发改动各归各 pane(live 分支不串文档);问 AI 回对会话;长文档注入不超预算;暂停跟随/不再自动打开/清除记忆可操作且不影响 agent 运行;doc-conflict 确认不被自动批准跳过。
 
-### 阶段四:agent↔agent 联动 `[ ]`
+### 阶段四:agent↔agent 联动 `[x]`
 
 27. 委派消息协议(§6.6 L3):任务描述 + 源 sessionId + 精选片段,单条预算上限;接收方按需工具拉取细节;
 28. composer @会话 / 拖会话 tab 到输入框 → 生成结构化委派(复用 §6.7 chip 体系);
@@ -543,3 +543,17 @@ function useSessionChat(sessionId: string) {
 - SessionManager 细化:workspace 作构造参数(setWorkspaceRoot 漏重建 fileHistoryTracker)、provider 指纹惰性重建(禁 mid-run setProvider)、事件注入选 SessionManager 转发处(单一咽喉)、不复用 SubagentEngine;
 - 防覆盖检测放 runGate + in-flight 注册表(非时间窗);复用 pendingApprovals 但必须豁免 renderer 全量自动批准;
 - 上下文预算:复用 buildDocumentContext(勿重写);迁移统一"旧 key 只读保留一版"(消除 v1 §4.4 与 R9 的矛盾表述)。
+
+
+---
+
+## 附录 T:标签页工具类型补齐(2026-09-20,响应产品追加)
+
+「打开标签页」落地页现有 5 张卡:辅助对话 / 文档 / **终端** / **浏览器** / **审查**。
+
+- **终端**(`{kind:'terminal'}`):主进程常驻管道 shell(`shellService.ts`,cmd /Q /K,cd 进程内生效)+ TerminalView 行模式(本地回显,回车整行);与底部抽屉共享同一 shell。限制:无 TTY,交互式全屏程序不可用(诚实标注)。
+- **浏览器**(`{kind:'browser'; startUrl?}`):Electron webview + 地址栏/后退(webPreferences 已开 webviewTag);同 URL 去重。
+- **审查**(`{kind:'review'; workspacePath?}`):真实数据概览——工作区顶层文件树(readWorkspaceFiles)+ 会话摘要(listSessions)。
+- 均经 tab-registry 注册(newCard + onCreateInTab + mentionSource 扩展点),自动获得分割/拖拽/落地页卡片全部能力;持久化 schema(isValidTarget)同步接受新 kind,带 T 系列测试。
+
+判定:阶段一/二 PASS、阶段三/四整改后复审 11/11 VERIFIED(见 E12/E13 与复审报告),四阶段代码完成;唯一遗留人工项=实机 8 会话压测(GUIDE 见 §10 阶段一验收/PLAN-P1 S8c)。

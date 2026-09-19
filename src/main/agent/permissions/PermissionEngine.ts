@@ -38,7 +38,13 @@ export const READ_ONLY_TOOLS = new Set([
   'docx_read',
   'docx_read_revisions',
   'WebFetch',
-  'WebSearch'
+  'WebSearch',
+  'AskUserQuestion',
+  'EnterPlanMode',
+  'ExitPlanMode',
+  'Skill',
+  'TaskList',
+  'TaskOutput'
 ])
 
 export const EDIT_TOOLS = new Set([
@@ -58,7 +64,11 @@ export const EDIT_TOOLS = new Set([
   'docx_delete_block',
   'docx_create',
   'docx_accept_revisions',
-  'docx_reject_revisions'
+  'docx_reject_revisions',
+  // R6
+  'NotebookEdit',
+  'TaskCreate',
+  'TaskStop'
 ])
 
 /**

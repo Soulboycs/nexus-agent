@@ -6,10 +6,16 @@
  * bun node 环境无 localStorage → persist 走 no-op storage(注入式,真实持久化在浏览器/Electron 生效),
  * 校验与 action 逻辑在此全量测试。
  */
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, beforeEach } from 'bun:test'
 import { useLayoutStore, validatePersisted, LAYOUT_PERSIST_KEY } from '../src/renderer/src/workspace/layout-store'
 import { collectAllPanes, findPaneById, MAX_TREE_DEPTH } from '../src/renderer/src/workspace/layout-model'
 import type { LayoutState } from '../src/renderer/src/workspace/layout-model'
+
+// the store is a module singleton: reset to the pristine initial state before
+// every test (this reset was lost with the truncated block, restoring it)
+beforeEach(() => {
+  useLayoutStore.setState(useLayoutStore.getInitialState(), true)
+})
 
 function snapshot(): LayoutState {
   const s = useLayoutStore.getState()
@@ -64,24 +70,21 @@ describe('layout-store — F2/F3/F4 action 层', () => {
     expect(findPaneById(useLayoutStore.getState().layout.root, newId!)).not.toBeNull()
   })
 
-  it('F4: 关最后可见 pane 的最后一个 tab → false 且状态不变', () => {
+  it('F4: 关 tab 级联与最后可见守门(确定性状态构造)', () => {
     const st = useLayoutStore.getState()
-    // 重置到初始(关掉 F3 遗留的 pane 不必要——直接新建断言语义)
-    const pane = collectAllPanes(st.layout.root)[0]
-    const ok = st.closeTab(pane.tabs[0].tabId)
-    // 当前状态有多个 tab/pane 时可能成功;用单 pane 布局断言:重建 store 不便,退而验证布尔返回与守门一致
-    expect(typeof ok).toBe('boolean')
-  })
-
-  it('F4b: 干净 store 中关唯一 tab → false(最后可见守门)', () => {
-    // 独立 store 实例无法轻易重建(模块单例)——用 state 校验:全部关完前守门必须拦截
-    const st = useLayoutStore.getState()
-    const panes = collectAllPanes(st.layout.root)
-    if (panes.length === 1 && panes[0].tabs.length === 1) {
-      expect(st.closeTab(panes[0].tabs[0].tabId)).toBe(false)
-    } else {
-      expect(true).toBe(true) // 前序用例已改状态;守门语义由 S2 的 B8 覆盖
-    }
+    const p0 = collectAllPanes(st.layout.root)[0]
+    // 构造双 pane
+    const newId = st.splitPane(p0.id, 'right', { target: { kind: 'chat', sessionId: 's2' } })
+    expect(newId).not.toBeNull()
+    const panes = collectAllPanes(useLayoutStore.getState().layout.root)
+    expect(panes.length).toBe(2)
+    const other = panes.find((x) => x.id !== p0.id)!
+    expect(useLayoutStore.getState().closeTab(other.tabs[0].tabId)).toBe(true)
+    expect(collectAllPanes(useLayoutStore.getState().layout.root).length).toBe(1)
+    // 回到唯一 pane 单 tab:守门必须拦截(R3)
+    const only = collectAllPanes(useLayoutStore.getState().layout.root)[0]
+    expect(useLayoutStore.getState().closeTab(only.tabs[0].tabId)).toBe(false)
+    expectInvariants(useLayoutStore.getState())
   })
 })
 

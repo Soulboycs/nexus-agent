@@ -19,6 +19,9 @@ export interface ToolContext {
   // Permission/sandbox/approval context (subagents thread these into their own
   // query loop — 1:1 Claude Code canUseTool propagation through createSubagentContext).
   permissionMode?: PermissionMode
+  /** Read current mode (PlanMode tools switch modes from inside a tool). */
+  getPermissionMode?: () => PermissionMode
+  setPermissionMode?: (mode: PermissionMode) => void
   permissionEngine?: PermissionEngine
   sandboxGuard?: SandboxGuard
   onApprovalRequired?: (request: ApprovalRequest) => Promise<boolean | ApprovalVerdict>
@@ -51,6 +54,8 @@ export interface AgentTool<TArgs = any> {
   
   // Safety, scheduling and behavioral flags
   requiresApproval?: (args: TArgs) => boolean
+  /** 1:1 cc requiresUserInteraction: the tool needs the user in the loop to complete. */
+  requiresUserInteraction?: boolean
   isReadOnly?: (args?: TArgs) => boolean
   isConcurrencySafe?: (args?: TArgs) => boolean
   isDestructive?: (args?: TArgs) => boolean

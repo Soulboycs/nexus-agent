@@ -1765,6 +1765,10 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
     // CT_ParaRPr puts w:del first, before size/color children
     const at = children.findIndex((c) => c.name === 'w:rPr')
     if (at >= 0) {
+      // the open-tag replace assumes an attribute-less <w:rPr>: the only
+      // producer (formatPPrChildren's empty-paragraph-mark sz) guarantees
+      // that. If a future producer emits <w:rPr ...> or an rPr already
+      // carrying w:del, handle it here rather than letting the del drop.
       const existing = children[at]!.xml
       children[at] = {
         name: 'w:rPr',

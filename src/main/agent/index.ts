@@ -21,6 +21,12 @@ import {
 } from './tools/docxTools'
 import { createAgentTool } from './tools/agentTool'
 import { createToolSearchTool, ToolSearchManager } from './tools/ToolSearchTool'
+import { notebookEditTool } from './tools/notebookTool'
+import { askUserQuestionTool } from './tools/askUserQuestionTool'
+import { enterPlanModeTool, exitPlanModeTool } from './tools/planModeTools'
+import { skillTool } from './tools/skillTool'
+import { taskCreateTool, taskListTool, taskOutputTool, taskStopTool } from './tools/taskTools'
+import { connectMcpServers } from './tools/mcpTools'
 import { todoWriteTool, webFetchTool, webSearchTool } from './tools/coreTools'
 
 
@@ -61,6 +67,26 @@ export function createDefaultAgentEngine(options: AgentEngineOptions): AgentEngi
   registry.registerTool(todoWriteTool)
   registry.registerTool(webFetchTool)
   registry.registerTool(webSearchTool)
+
+  // R6 tool parity: NotebookEdit / AskUserQuestion / PlanMode / Skill / Task 系列
+  registry.registerTool(notebookEditTool)
+  registry.registerTool(askUserQuestionTool)
+  registry.registerTool(enterPlanModeTool)
+  registry.registerTool(exitPlanModeTool)
+  registry.registerTool(skillTool)
+  registry.registerTool(taskCreateTool)
+  registry.registerTool(taskListTool)
+  registry.registerTool(taskOutputTool)
+  registry.registerTool(taskStopTool)
+
+  // R6 MCP 客户端：.nexus/mcp.json 的 stdio server 工具动态注册（后台，不阻塞启动）
+  void connectMcpServers(process.cwd(), registry).then((summary) => {
+    if (summary.connected.length || summary.failed.length) {
+      console.log(
+        `[MCP] connected: ${summary.connected.join(', ') || 'none'} | tools: ${summary.tools.length} | failed: ${summary.failed.map((f) => `${f.name}(${f.error})`).join(', ') || 'none'}`
+      )
+    }
+  })
 
   // Register Word (.docx) tools
   registry.registerTool(docxReadTool)

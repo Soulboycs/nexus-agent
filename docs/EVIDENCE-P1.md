@@ -151,3 +151,11 @@
 | providerNegative 超时(用户 WIP providerHttp 10 次重试风暴) | 测试文件设快路 env(锁定 3 次)+进程级保存/恢复(修复 R2/R4 交叉污染) | 4/4 |
 
 整改后门禁:`bun test tests/` **718 pass / 0 fail** · vitest **59/59** · 双 typecheck 干净(过滤用户 WIP:fileTools aliases 重复键为用户进行中改动,非本任务范围,已提醒)
+
+## E13 — 附录 T:标签页工具类型补齐(2026-09-20)
+
+- 终端:主进程 `shellService.ts`(cmd /Q /K 常驻管道 shell + cd 同步)+ TerminalView 行模式(本地回显/退格,回车发整行)+ pane 变体(占满容器);与底部抽屉共享 shell。限制:无 TTY 无全屏程序(诚实标注)。
+- 浏览器:`webviewTag: true`(main webPreferences)+ BrowserPane(webview + 地址栏/后退);同 URL openTab 去重。
+- 审查:ReviewPane 真实数据(工作区顶层文件树 + 会话摘要,readWorkspaceFiles/listSessions)。
+- 注册表:三种 kind 注册 newCard/onCreateInTab/mentionSource 扩展点;isValidTarget 接受新 kind;T 系列测试(layoutModel 26/26)。
+- 门禁:bun **727 pass / 0 fail** · vitest **59/59** · 双 typecheck 干净 · build ✓ 6.44s。

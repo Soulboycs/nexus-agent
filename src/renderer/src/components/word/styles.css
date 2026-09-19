@@ -11749,7 +11749,10 @@ tr > .page-gap-cut {
 
 
 /* checkbox/radio rows inside modals: exempt from the global full-width
-   .modal input rule (same intent as .font-check input) */
+   .modal input rule AND from `.modal label { display:block }` — the latter
+   has higher specificity than a bare class, so qualify with `label.modal-*` */
+.modal label.modal-radio,
+.modal label.modal-check,
 .modal-radio,
 .modal-check {
   display: flex;
@@ -11844,4 +11847,26 @@ tr > .page-gap-cut {
 .find-opt.off {
   opacity: 0.55;
   text-decoration: line-through;
+}
+
+/* compare panel: export button styled to the panel theme; changed cards
+   get a neutral highlight of their own (added/removed have theirs) */
+.compare-export {
+  margin-left: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border, #d0d3d8);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  color: var(--text, #242424);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.compare-export:hover {
+  background: var(--hover, #f5f5f5);
+  border-color: #1a66d6;
+  color: #1a66d6;
+}
+.compare-changed {
+  background: color-mix(in srgb, var(--docs-ins-bg) 45%, var(--docs-del-bg) 55%);
 }

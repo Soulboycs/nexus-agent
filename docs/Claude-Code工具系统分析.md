@@ -465,3 +465,30 @@ cc-haha 的 `backfillObservableInput`（§6 决策 4）保证 hooks/审批/事�
 | 代理/办公 | Agent、docx_create / read / read_revisions / append_content / modify_block / apply_ops / insert_table / delete_block / accept_revisions / reject_revisions |
 
 **仍未对齐的 cc 工具**（按需分批）：NotebookEdit、AskUserQuestion（可复用 HITL 通道）、EnterPlanMode/ExitPlanMode、TaskCreate/Get/Update/List/Stop（需后台任务基础设施）、Skill（可接 .agents/skills 加载器）、LSP、SendMessage/Team 系列（需 swarm）、Workflow、ImageGen/Edit、Cron 四件套、Monitor、PowerShell（独立工具，语义已含于 Bash）、WebBrowser、MCP 资源工具（ListMcpResources/ReadMcpResource，需 MCP 客户端接入）。
+
+
+---
+
+## 14. R6 工具目录补齐 II（交互/计划/笔记本/技能/后台任务/MCP，2026-09-20 深夜）
+
+§13.3「仍未对齐清单」中的六个切片落地，注册表从 22 → **31 个工具**：
+
+| 工具/系列 | 对标 | 核心语义 | 已披露简化 |
+| :--- | :--- | :--- | :--- |
+| **NotebookEdit** | cc NotebookEditTool | .ipynb 单元 replace/insert/delete；replace 重置 code cell 执行状态；cell_id 兼容 `cell-N` 索引形式 | 无 readFileState read-before-edit 强制（以 JSON 有效性+mtime 即时读替代） |
+| **AskUserQuestion** | cc AskUserQuestionTool | checkPermissions 恒 ask（交互在权限层）→ 复用 HITL：UI 经审批 updatedInput 回填 answers；输出作答+notes+guidance | bypass/无回调时返回"自行决策"提示（cc 的 channels 禁用等价）；UI 侧选项渲染后续接 ApprovalCard |
+| **EnterPlanMode / ExitPlanMode** | cc EnterPlanMode/ExitPlanModeV2 | 复用 plan 权限模式：Enter 切 plan（写/命令被权限系统阻断）→ Exit 恒 ask（计划必须经用户批准，updatedInput 可改写）→ 批准后恢复 ask；ExitPlanMode 非 plan 模式拒绝（负向） | plan 内容经参数携带而非磁盘 plan 文件；无 teammate mailbox 分支 |
+| **Skill** | cc SkillTool（inline 模式） | 加载 `.agents/skills/<name>/SKILL.md`（兼容 .claude/skills），$ARGUMENTS 替换、frontmatter 剥离；未知 skill 列出可用清单 | 无 SAFE_SKILL_PROPERTIES 权限白名单、fork 模式、插件注册表 |
+| **TaskCreate/TaskList/TaskOutput/TaskStop** | cc Task 系列（后台任务核心版） | 真实后台 spawn（独立于 query 信号存活）、环形输出缓冲 1000 行、按 id 回读/终止；TaskCreate 需审批 | agent 型后台任务与完成通知回调未含 |
+| **MCP 客户端** | cc mcp__ 工具桥（stdio 核心版） | `.nexus/mcp.json` 配置 stdio server → @modelcontextprotocol/sdk Client → 动态注册 `mcp__<server>__<tool>`（passthrough schema + isError 透传 + 内容拼接）；失败 log 跳过不阻塞 | 仅 stdio；无 SSE/HTTP 传输、资源工具（ListMcpResources）、OAuth |
+
+上下文穿透：ToolContext 新增 `getPermissionMode/setPermissionMode`（AgentEngine→query→executor 全链路注入），PlanMode 工具从工具内部切换权限模式（1:1 cc applyPermissionUpdate(setMode) 等价）。
+
+### 14.1 仍未对齐（依赖更重的基础设施）
+
+| 项 | 依赖 | 去向 |
+| :--- | :--- | :--- |
+| Cron 四件套 | 无人值守调度运行器 + 持久化 | 下批（需设计到点触发与 agent 生命周期集成） |
+| LSP 工具 | tsserver/语言服务器进程管理 | 下批 |
+| SendMessage / Team 系列 | swarm（异步代理/邮箱/权限同步桥） | 下批 |
+| cc 侧其余裁剪（WebFetch 提炼管线与域名三层限制、WebSearch provider 后端、Bash 后台参数与输出落盘、Read cat -n/图片/PDF、read-before-write 状态机） | 见 §13 差距矩阵与 R7 计划 | 分批 |

@@ -10,6 +10,7 @@ import { useSessionChat } from '../../hooks/useSessionChat'
 import { sessionEventBus } from '../../utils/sessionEventBus'
 import { useLayoutStore } from '../layout-store'
 import { useLinkageStore } from '../linkage-store'
+import { useDroppable } from '@dnd-kit/core'
 import { findPaneById, collectAllPanes as collectPanes } from '../layout-model'
 import { usePaneHost } from '../pane-host-context'
 import { getSessionWordDoc, getRecentWordFiles } from '../../components/word/persistence'
@@ -91,6 +92,19 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
       } catch {}
     })()
   }, [host.workspace])
+
+  // 拖会话 tab 到本输入框 → 注入委派 token(§6.7/条目28)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{ composerSessionId: string; droppedSessionId: string }>).detail
+      if (!d || d.composerSessionId !== sessionId) return
+      const cand = mentionCandidates.find((c) => c.type === 'session' && c.id === d.droppedSessionId)
+      const token = cand ? `@${cand.name} ` : `@${d.droppedSessionId.slice(0, 8)} `
+      setPromptInput((prev) => (prev.startsWith('@') ? prev : token + prev))
+    }
+    window.addEventListener('nexus-composer-mention', handler)
+    return () => window.removeEventListener('nexus-composer-mention', handler)
+  }, [sessionId, mentionCandidates])
 
   // —— 滚动跟随 ——
   useEffect(() => {
@@ -334,6 +348,17 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
         </div>
       )}
 
+      {(() => {
+        const composerDrop = useDroppable({
+          id: `composer:${sessionId}`,
+          data: { kind: 'composer', sessionId }
+        })
+        return (
+        <div
+          ref={composerDrop.setNodeRef}
+          className={`shrink-0 ${composerDrop.isOver ? 'ring-2 ring-inset ring-blue-300 rounded-b-2xl' : ''}`}
+          data-testid={`composer-drop-${sessionId}`}
+        >
       <FloatingInputDock
         promptInput={promptInput}
         onChange={(e) => setPromptInput(e.target.value)}
@@ -356,6 +381,9 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
         onPermissionModeChange={host.onPermissionModeChange}
         mentionCandidates={mentionCandidates}
       />
+        </div>
+        )
+      })()}
     </div>
   )
 }

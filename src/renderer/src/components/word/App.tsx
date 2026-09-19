@@ -2648,7 +2648,7 @@ export function App() {
     if (authors.length === revisionAuthors.length) return null
     // escape for the attribute selector: a quote/backslash in a name would
     // invalidate the whole rule and silently disable the filter
-    const esc = (a: string) => a.replace('\\', '\\\\').replace('"', '\\"')
+    const esc = (a: string) => a.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     const keep = authors
       .map(
         (a) =>

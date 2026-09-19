@@ -14,13 +14,22 @@ import {
 } from '@dnd-kit/core'
 import { collectAllPanes, findPaneById, type LayoutNode, type SplitPosition, type TabTarget } from './layout-model'
 import { useLayoutStore } from './layout-store'
-import { resolveSplitDropPosition, type SplitDropPosition } from './drag-geometry'
+import { resolveSplitDropPosition, computeChipInsertion, type Rect, type SplitDropPosition } from './drag-geometry'
+const toRect = (r: { left: number; top: number; width: number; height: number }): Rect => ({ x: r.left, y: r.top, width: r.width, height: r.height })
 import { getTabTitle } from './tab-registry'
 
 /** 统一拖拽数据协议(§5.1,D8:所有 tab 一视同仁) */
 export type DragPayload =
   | { kind: 'target'; target: TabTarget } // 侧栏条目/落地页来源(未必已开)
   | { kind: 'tab'; tabId: string } // 已打开的 tab chip
+
+function findTabTarget(root: LayoutNode, tabId: string): TabTarget | null {
+  for (const p of collectAllPanes(root)) {
+    const t = p.tabs.find((x) => x.tabId === tabId)
+    if (t) return t.target
+  }
+  return null
+}
 
 export interface DndUIState {
   preview: { paneId: string; position: SplitDropPosition } | { paneId: string; kind: 'chip'; tabId: string; before: boolean } | null
@@ -68,11 +77,11 @@ export function WorkspaceDnd({ children }: { children: React.ReactNode }) {
   }
 
   const onDragOver = (e: DragOverEvent) => {
-    const over = e.over?.data.current as { kind?: string; paneId?: string; tabId?: string; rect?: DOMRect } | undefined
+    const over = e.over?.data.current as { kind?: string; paneId?: string; tabId?: string; sessionId?: string; rect?: DOMRect } | undefined
     if (over?.kind === 'tab-chip' && over.tabId && e.over?.rect) {
       const tr = e.active.rect.current.translated
       const cx = tr ? tr.left + tr.width / 2 : e.over.rect.left + e.over.rect.width / 2
-      const before = cx < e.over.rect.left + e.over.rect.width / 2
+      const before = computeChipInsertion(cx, [toRect(e.over.rect)], 0) === 0
       setPreview({ paneId: over.paneId!, kind: 'chip', tabId: over.tabId, before })
       return
     }
@@ -96,7 +105,7 @@ export function WorkspaceDnd({ children }: { children: React.ReactNode }) {
     if (!payload) return
     const store = useLayoutStore.getState()
     const over = e.over?.data.current as
-      | { kind?: string; paneId?: string; tabId?: string }
+      | { kind?: string; paneId?: string; tabId?: string; sessionId?: string }
       | undefined
     if (!over) return
 
@@ -109,7 +118,7 @@ export function WorkspaceDnd({ children }: { children: React.ReactNode }) {
     if (over.kind === 'tab-chip' && over.paneId && over.tabId && e.over?.rect) {
       const tr = e.active.rect.current.translated
       const cx = tr ? tr.left + tr.width / 2 : e.over.rect.left + e.over.rect.width / 2
-      const before = cx < e.over.rect.left + e.over.rect.width / 2
+      const before = computeChipInsertion(cx, [toRect(e.over.rect)], 0) === 0
       const targetPane = findPaneById(useLayoutStore.getState().layout.root, over.paneId)
       const idx = targetPane?.tabs.findIndex((t) => t.tabId === over.tabId) ?? -1
       const prevId = before ? (targetPane && idx > 0 ? targetPane.tabs[idx - 1].tabId : undefined) : over.tabId
@@ -118,6 +127,21 @@ export function WorkspaceDnd({ children }: { children: React.ReactNode }) {
         store.moveTabToPane(payload.tabId, over.paneId, prevId, front)
       } else {
         store.openTab(payload.target, front ? { paneId: over.paneId } : { paneId: over.paneId, afterTabId: over.tabId })
+      }
+      return
+    }
+
+    if (over.kind === 'composer' && over.sessionId) {
+      // §6.7/条目28:拖会话 tab 到另一输入框 → 注入委派 token(该 pane 自己解析为委派消息)
+      if (payload.kind === 'tab') {
+        const t = findTabTarget(useLayoutStore.getState().layout.root, payload.tabId)
+        if (t && t.kind === 'chat' && t.sessionId !== over.sessionId) {
+          window.dispatchEvent(
+            new CustomEvent('nexus-composer-mention', {
+              detail: { composerSessionId: over.sessionId, droppedSessionId: t.sessionId }
+            })
+          )
+        }
       }
       return
     }

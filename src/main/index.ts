@@ -8,11 +8,17 @@ import { SessionManager, type SessionEngineLike } from './agent/SessionManager'
 import { SendRateMeter } from './agent/utils/sendRateMeter'
 import { DocConflictDetector } from './agent/utils/docConflictDetector'
 import { installTerminalBridge } from './terminal/shellService'
+import { createPerfLoadProvider } from './agent/utils/perfLoad'
 import { AgentEvent, ProviderConfig, FileTreeNode, PermissionMode, normalizePermissionMode } from '../shared/types'
 import { logger } from './utils/logger'
 import { registerDocxIpc } from './docx/docxIpc'
 import { isDocsEditorReady } from './docx/docsBridge'
 import { setDocsEditorReadyProbe } from './agent/utils/runtimeContext'
+
+// E2E 隔离:GUI 测试传入独立 userData,避免污染真实用户数据/布局
+if (process.env.NEXUS_TEST_USERDATA) {
+  app.setPath('userData', process.env.NEXUS_TEST_USERDATA)
+}
 
 app.disableHardwareAcceleration()
 app.commandLine.appendSwitch('no-sandbox')
@@ -46,7 +52,11 @@ const engineWorkspace = new Map<string, string>()
 /** sessionId → 创建引擎时的 provider 指纹;save-config 后清空 = 全量失效,下次 send 惰性重建 */
 const providerFingerprintBySession = new Map<string, string>()
 /** SessionManager 工厂取用的"当前创建上下文"(接线层在 ensure 前设置) */
-let pendingCreateCtx: { workspaceRoot: string; providerConfig: ProviderConfig } | null = null
+let pendingCreateCtx: {
+  workspaceRoot: string
+  providerConfig: ProviderConfig
+  customProvider?: import('./agent/providers/LLMProvider').ILLMProvider
+} | null = null
 
 function providerFingerprint(config: ProviderConfig): string {
   // 整配置序列化(含 providers[] 的 baseURL/apiFormat 变更);仅存内存,不落日志
@@ -376,7 +386,23 @@ app.whenReady().then(async () => {
 
     if (!sessionManager.has(sid)) {
       if (ws !== currentWorkspace) currentWorkspace = ws
-      pendingCreateCtx = { workspaceRoot: currentWorkspace, providerConfig: config }
+      // §8.3 确定性负载:__perf 前缀 → 引擎改用合成流式 provider(无真实 LLM,压测用)
+      if (prompt.startsWith('__perf')) logger.info('MainProcess', `__perf engine requested for ${sid}`)
+      pendingCreateCtx = {
+        workspaceRoot: currentWorkspace,
+        providerConfig: config,
+        ...(prompt.startsWith('__perf')
+          ? {
+              customProvider: createPerfLoadProvider({
+                totalChars: 6000,
+                chunkChars: 120,
+                delayMs: 25,
+                burstEvery: 8,
+                burstChars: 10_240
+              })
+            }
+          : {})
+      }
     }
 
     sessionManager

@@ -34,6 +34,9 @@ export interface QueryParams {
   toolSearchManager?: ToolSearchManager
   fileHistoryTracker?: any
   permissionMode?: PermissionMode
+  /** Mode read/write threading for in-tool mode switches (EnterPlanMode/ExitPlanMode). */
+  getPermissionMode?: () => PermissionMode
+  setPermissionMode?: (mode: PermissionMode) => void
   permissionEngine?: PermissionEngine
   sandboxGuard?: SandboxGuard
   maxTurns?: number
@@ -551,6 +554,8 @@ export async function* query(params: QueryParams): AsyncGenerator<AgentEvent, Qu
         permissionEngine: params.permissionEngine,
         sandboxGuard: params.sandboxGuard,
         permissionMode: params.permissionMode,
+        getPermissionMode: params.getPermissionMode,
+        setPermissionMode: params.setPermissionMode,
       },
       (id, chunk) => params.onToolProgress?.(id, chunk),
       {

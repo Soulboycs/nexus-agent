@@ -172,6 +172,7 @@ export function registerDocxIpc(getMainWindow: () => BrowserWindow | null) {
           outBuffer = encryptDocx(outBuffer, pwd)
         }
         await atomicWriteFile(filePath, outBuffer)
+        notifyDocsSavedByEditor(filePath)
         return { ok: true, path: filePath }
       } catch (err: any) {
         return { ok: false, error: err?.message || String(err) }

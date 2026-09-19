@@ -130,19 +130,12 @@ function SplitPaneView({
   onCreateChat?: () => void
   onSplit?: (position: 'left' | 'right' | 'top' | 'bottom', paneId: string) => void
 }) {
-  const onRender = React.useCallback(
-    (_id: string, _phase: string, actualDuration: number) => {
-      if (import.meta.env.DEV) {
-        // §8.3 验收计数:单 pane 流式时其余 pane 计数不增
-        bumpRenderCount(pane.id)
-        void actualDuration
-      }
-    },
-    [pane.id]
-  )
+  // §8.3 验收计数(生产可用):函数体执行即一次渲染;React.Profiler 在 prod 是 no-op,不可依赖
+  if (import.meta.env.DEV || localStorage.getItem('nexus_perf_probe') === '1') bumpRenderCount(pane.id)
   const content = (
     <div
       data-testid={`pane-${pane.id}`}
+      data-pane-tabs={pane.tabs.length}
       className="flex flex-col min-w-0 min-h-0 w-full bg-white relative"
     >
       <TabBar pane={pane} onCreateChat={onCreateChat} onSplit={onSplit} />
@@ -158,12 +151,7 @@ function SplitPaneView({
       </div>
     </div>
   )
-  if (!import.meta.env.DEV) return content
-  return (
-    <React.Profiler id={pane.id} onRender={onRender}>
-      {content}
-    </React.Profiler>
-  )
+  return content
 }
 
 /** 供 App 查询当前布局快照(诊断/测试辅助) */
