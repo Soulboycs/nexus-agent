@@ -39,10 +39,28 @@ describe('AgentEngine E2E — MockProvider', () => {
     expect(thinkingEvents.length).toBeGreaterThan(0)
   })
 
-  it('switches provider via setProvider without crashing', () => {
-    const engine = new AgentEngine({ workspaceRoot: 'C:/Temp' })
+  it('switches provider via setProvider and the new provider actually serves the next turn', async () => {
+    // 2026-09-18 重写：原版本仅 not.toThrow（setter 无抛错路径，永真）。
+    // 现验证切换后下一回合由新 provider 真实接管。
+    const mock1 = new MockLLMProvider()
+    mock1.queueResponse({ content: 'FIRST_PROVIDER_OK' })
+    const engine = new AgentEngine({ workspaceRoot: 'C:/Temp', customProvider: mock1 })
+    await engine.run('Say first')
+    expect(engine.getStatus()).toBe('completed')
+
     const mock2 = new MockLLMProvider()
-    expect(() => engine.setProvider(mock2)).not.toThrow()
+    mock2.queueResponse({ content: 'SECOND_PROVIDER_OK' })
+    engine.setProvider(mock2)
+
+    const deltas: string[] = []
+    engine.on('event', (e: any) => {
+      if (e.type === 'message_delta') deltas.push(e.delta)
+    })
+    await engine.run('Say second')
+
+    expect(engine.getStatus()).toBe('completed')
+    // 若 setProvider 未生效，mock1 队列已空只会返回默认兜底文案
+    expect(deltas.join('')).toBe('SECOND_PROVIDER_OK')
   })
 
   it('should abort mid-run cleanly', async () => {
@@ -69,9 +87,10 @@ describe('AgentEngine E2E — MockProvider', () => {
     expect(engine.getStatus()).toBe('idle')
   })
 
-  it('respects maxSteps and halts without infinite loop', async () => {
+  it('halts exactly at maxSteps with error status and step-limit message', async () => {
+    // 2026-09-18 重写：原版本 toContain(['error','completed','idle']) 接受一切
+    // 终态（删掉 maxSteps 逻辑也通过）。现钉死精确停点与错误语义。
     const mock = new MockLLMProvider()
-    // Queue tool calls to keep agent looping
     for (let i = 0; i < 10; i++) {
       mock.queueResponse({
         toolCalls: [{ id: `call_${i}`, name: 'read_file', arguments: { path: 'test.ts' } }]
@@ -82,12 +101,25 @@ describe('AgentEngine E2E — MockProvider', () => {
     const engine = new AgentEngine({
       workspaceRoot: 'C:/Temp',
       customProvider: mock,
-      maxSteps: 3  // force early halt
+      maxSteps: 3
+    })
+
+    const errorStatuses: Array<{ status: string; message?: string }> = []
+    let toolStarts = 0
+    engine.on('event', (e: any) => {
+      if (e.type === 'status_change') {
+        if (e.status === 'error') errorStatuses.push({ status: e.status, message: e.message })
+      }
+      if (e.type === 'tool_call_start') toolStarts++
     })
 
     await engine.run('Read files forever')
-    // Should halt at maxSteps, not run forever
-    expect(['error', 'completed', 'idle']).toContain(engine.getStatus())
+
+    // 恰好在第 3 步封顶 —— maxSteps 失效则会执行全部 10 次工具调用并 completed
+    expect(toolStarts).toBe(3)
+    expect(engine.getStatus()).toBe('error')
+    expect(errorStatuses.length).toBeGreaterThan(0)
+    expect(errorStatuses[0].message).toContain('maximum step limit')
   })
 
   it('handles multiple sequential runs', async () => {

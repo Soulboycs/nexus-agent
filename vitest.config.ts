@@ -14,7 +14,16 @@ export default defineConfig({
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),
       '@main': resolve(__dirname, 'src/main'),
-      '@agent': resolve(__dirname, 'src/main/agent')
+      '@agent': resolve(__dirname, 'src/main/agent'),
+      // 与 electron.vite.config.ts 的 packageAliases 保持一致（1:1），
+      // 否则 word 编辑器组件测试无法解析 @genoffice/* 导入
+      '@genoffice/docx-engine': resolve(__dirname, 'src/packages/docx-engine'),
+      '@genoffice/font-metrics': resolve(__dirname, 'src/packages/font-metrics'),
+      '@genoffice/i18n': resolve(__dirname, 'src/packages/i18n'),
+      '@genoffice/ui': resolve(__dirname, 'src/packages/ui'),
+      '@genoffice/electron-utils': resolve(__dirname, 'src/packages/electron-utils'),
+      '@genoffice/agent-core': resolve(__dirname, 'src/packages/agent-core'),
+      '@genoffice/ai-provider': resolve(__dirname, 'src/packages/ai-provider')
     }
   }
 })

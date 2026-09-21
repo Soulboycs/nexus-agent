@@ -17,7 +17,8 @@ describe('AgentEngine - ReAct Loop & HITL Authorization Tests', () => {
     mockProvider = new MockLLMProvider()
     engine = new AgentEngine({
       workspaceRoot: tempDir,
-      customProvider: mockProvider
+      customProvider: mockProvider,
+      permissionMode: 'bypass'
     })
     engine.getToolRegistry().registerTool(writeToFileTool)
   })
@@ -70,6 +71,7 @@ describe('AgentEngine - ReAct Loop & HITL Authorization Tests', () => {
   })
 
   it('triggers approval request for dangerous actions and handles user approval', async () => {
+    engine.setPermissionMode('ask')
     // Custom tool that requires approval
     engine.getToolRegistry().registerTool({
       name: 'dangerous_action',
@@ -111,6 +113,7 @@ describe('AgentEngine - ReAct Loop & HITL Authorization Tests', () => {
   })
 
   it('handles user rejection cleanly and informs model', async () => {
+    engine.setPermissionMode('ask')
     engine.getToolRegistry().registerTool({
       name: 'restricted_action',
       description: 'Restricted action',

@@ -164,4 +164,18 @@ describe('StreamPacer — TDD: 平滑打字机缓冲消费引擎', () => {
     while (!pacer.isDone()) pacer.step(16)
     expect(pacer.getDisplayed()).toBe(target)
   })
+
+  it('P3: dt=199 still paces smoothly while dt=200 flushes (background-compensation boundary)', () => {
+    const text = 'Y'.repeat(500)
+    pacer.setTarget(text)
+
+    const after199 = pacer.step(199) // 恰低于补偿阈值：仍走自适应曲线
+    expect(pacer.isDone()).toBe(false)
+    expect(after199.length).toBeGreaterThan(2)
+    expect(after199.length).toBeLessThan(text.length)
+
+    const after200 = pacer.step(200) // 达到阈值：整段快进
+    expect(pacer.isDone()).toBe(true)
+    expect(after200).toBe(text)
+  })
 })

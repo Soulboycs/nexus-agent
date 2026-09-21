@@ -6,14 +6,22 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Check
+  Check,
+  FolderOpen,
+  FileCode,
+  FileText,
+  FileEdit,
+  Terminal,
+  Search,
+  Code2
 } from 'lucide-react'
 import { ToolCallPayload, ToolResultPayload } from '@shared/types'
 
-export const DcBadge: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+export const DcBadge: React.FC<{ className?: string }> = ({ className = 'w-[15px] h-[15px]' }) => (
   <span
-    className={`inline-flex items-center justify-center bg-[#18181b] text-white rounded-[3px] text-[8.5px] font-black tracking-tight select-none shrink-0 ${className}`}
+    className={`inline-flex items-center justify-center bg-[#18181b] text-white rounded-[4px] text-[8px] font-bold tracking-tight select-none shrink-0 ${className}`}
     style={{ lineHeight: 1 }}
+    title="数据/会话/服务检查"
   >
     DC
   </span>
@@ -30,30 +38,47 @@ export function resolveActionTitle(name: string, args: any): string {
 
   const rawPath = args?.filePath || args?.path || args?.AbsolutePath || ''
   const filename = rawPath ? String(rawPath).split(/[/\\]/).pop() : ''
+  // R5 正名 → 旧语义名（下游展示分支按旧名编写，双名兼容）
+  const legacyName =
+    (
+      {
+        Read: 'view_file',
+        Write: 'write_to_file',
+        Edit: 'replace_file_content',
+        Bash: 'run_command',
+        Glob: 'find_by_name',
+        Grep: 'grep_search',
+        LS: 'list_directory',
+      } as Record<string, string>
+    )[name] ?? name
+  const nameLower = legacyName.toLowerCase()
 
-  if (name === 'view_file') {
+  if (legacyName === 'view_file' || legacyName === 'read_file') {
     return filename ? `查看文件 ${filename}` : '查看代码文件'
   }
-  if (name === 'replace_file_content') {
+  if (legacyName === 'replace_file_content' || legacyName === 'edit_file') {
     return filename ? `修改文件 ${filename}` : '修改代码实现'
   }
-  if (name === 'write_to_file') {
+  if (legacyName === 'write_to_file' || legacyName === 'write_file') {
     return filename ? `写入文件 ${filename}` : '创建或更新文件'
   }
-  if (name === 'run_command') {
+  if (legacyName === 'run_command' || legacyName === 'execute_command' || legacyName === 'bash') {
     const cmd = args?.command || args?.CommandLine || ''
+    if (cmd.includes('test')) return `运行测试: ${cmd}`
+    if (cmd.includes('build')) return `编译构建: ${cmd}`
     return cmd ? `执行命令: ${cmd}` : '执行终端命令'
   }
-  if (name === 'grep_search') {
+  if (legacyName === 'grep_search') {
     const query = args?.query || args?.Query || ''
     return query ? `检索代码: ${query}` : '搜索代码内容'
   }
-  if (name === 'find_by_name' || name === 'glob_find') {
+  if (legacyName === 'find_by_name' || legacyName === 'glob_find' || nameLower.includes('glob')) {
     const pattern = args?.pattern || args?.Pattern || ''
-    return pattern ? `查找文件: ${pattern}` : '定位文件'
+    return pattern ? `检索工作区文件: ${pattern}` : '扫描工作区文件'
   }
-  if (name === 'list_directory') {
-    return filename ? `浏览目录 ${filename}` : '查看目录结构'
+  if (legacyName === 'list_directory' || legacyName === 'list_dir') {
+    const dir = filename || args?.directory || args?.dir || args?.DirectoryPath || ''
+    return dir ? `浏览目录 ${dir}` : '查看目录结构'
   }
   return `执行操作: ${name}`
 }
@@ -67,34 +92,45 @@ function resolveCategoryIcon(name: string, args: any, status: 'running' | 'compl
   }
 
   const actionText = (args?.toolAction || '').trim()
+  const rawPath = args?.filePath || args?.path || args?.AbsolutePath || ''
+  const filename = rawPath ? String(rawPath).split(/[/\\]/).pop()?.toLowerCase() : ''
+  const fullPathLower = String(rawPath).toLowerCase()
+  // R5 正名 → 旧语义名（下游展示分支按旧名编写，双名兼容）
+  const legacyName =
+    (
+      {
+        Read: 'view_file',
+        Write: 'write_to_file',
+        Edit: 'replace_file_content',
+        Bash: 'run_command',
+        Glob: 'find_by_name',
+        Grep: 'grep_search',
+        LS: 'list_directory',
+      } as Record<string, string>
+    )[name] ?? name
+  const nameLower = legacyName.toLowerCase()
 
-  // 1. Green/Emerald Lightning (⚡): explicitly for final fixes, verification, or zap actions
+  // 1. 显式绿色/翡翠闪电 (⚡)：最终修复落地、核心命令执行
   if (
     actionText.startsWith('⚡') ||
-    actionText.includes('排查跨账户') ||
-    actionText.includes('执行') ||
-    (actionText.includes('修复') && name === 'replace_file_content')
+    actionText.includes('最终验证') ||
+    actionText.includes('修复完成')
   ) {
     return <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500 shrink-0" />
   }
 
-  // 2. Triangle (▲): sub-investigation steps
-  if (
-    actionText.startsWith('▲') ||
-    actionText.includes('会话加载器') ||
-    actionText.includes('超时及数据库') ||
-    actionText.includes('配置')
-  ) {
+  // 2. 显式三角形分支 (▲)：子任务分析排查
+  if (actionText.startsWith('▲')) {
     return <span className="text-[10px] text-neutral-800 font-bold shrink-0 select-none">▲</span>
   }
 
-  // 3. GitHub (🐙): code search / postgres / repo files
+  // 3. GitHub / 仓库检索 (🐙)
   if (
     actionText.startsWith('Github') ||
     actionText.startsWith('🐙') ||
-    actionText.includes('PostgreSQL') ||
-    name === 'grep_search' ||
-    name === 'find_by_name'
+    actionText.includes('Github') ||
+    actionText.includes('Git') ||
+    actionText.includes('PostgreSQL')
   ) {
     return (
       <svg className="w-3.5 h-3.5 text-neutral-800 shrink-0 fill-current select-none" viewBox="0 0 24 24">
@@ -103,8 +139,107 @@ function resolveCategoryIcon(name: string, args: any, status: 'running' | 'compl
     )
   }
 
-  // 4. Default: DC Badge (Data/Code/Session checks matching screenshots)
-  return <DcBadge />
+  // 4. 数据层 / 会话 / 缓存 / 认证 / 跨账号检查 -> DC 徽标
+  // (只有真正排查数据、会话、Token、缓存穿透、数据库时才使用 DC 徽标！)
+  const isDataOrSession =
+    actionText.includes('数据') ||
+    actionText.includes('会话') ||
+    actionText.includes('登录') ||
+    actionText.includes('缓存') ||
+    actionText.includes('账户') ||
+    actionText.includes('账号') ||
+    actionText.includes('session') ||
+    actionText.includes('auth') ||
+    actionText.includes('token') ||
+    actionText.includes('cache') ||
+    actionText.includes('database') ||
+    fullPathLower.includes('session') ||
+    fullPathLower.includes('auth') ||
+    fullPathLower.includes('cache') ||
+    fullPathLower.includes('db.') ||
+    fullPathLower.includes('database')
+  if (isDataOrSession) {
+    return <DcBadge />
+  }
+
+  // 5. 目录浏览 / 查看文件夹结构
+  if (
+    nameLower === 'list_directory' ||
+    nameLower === 'list_dir' ||
+    actionText.includes('目录') ||
+    actionText.includes('文件夹')
+  ) {
+    return <FolderOpen className="w-3.5 h-3.5 text-amber-500/90 shrink-0" />
+  }
+
+  // 6. 工作区文件检索 / 查找文件路径 / Glob 匹配
+  if (
+    nameLower === 'find_by_name' ||
+    nameLower === 'glob_find' ||
+    nameLower.includes('glob') ||
+    actionText.includes('检索工作区') ||
+    actionText.includes('查找文件')
+  ) {
+    return <Search className="w-3.5 h-3.5 text-blue-500/90 shrink-0" />
+  }
+
+  // 7. 代码全局检索 (grep_search)
+  if (nameLower === 'grep_search' || actionText.includes('搜索') || actionText.includes('检索代码')) {
+    return <Search className="w-3.5 h-3.5 text-indigo-500/90 shrink-0" />
+  }
+
+  // 8. 代码修改 / 写入 / 编辑
+  if (
+    nameLower === 'replace_file_content' ||
+    nameLower === 'edit_file' ||
+    nameLower === 'write_to_file' ||
+    nameLower === 'write_file' ||
+    actionText.includes('修改') ||
+    actionText.includes('编辑') ||
+    actionText.includes('写入')
+  ) {
+    return <FileEdit className="w-3.5 h-3.5 text-emerald-600/90 shrink-0" />
+  }
+
+  // 9. 终端命令执行 (run_command)
+  if (
+    nameLower === 'run_command' ||
+    nameLower === 'execute_command' ||
+    nameLower === 'bash' ||
+    actionText.includes('命令') ||
+    actionText.includes('终端')
+  ) {
+    return <Terminal className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
+  }
+
+  // 10. 文件查看 (view_file / read_file) 细分：根据文件扩展名展现精细图标
+  if (nameLower === 'view_file' || nameLower === 'read_file' || actionText.includes('查看文件') || actionText.includes('读取文件')) {
+    if (
+      filename?.endsWith('.ts') ||
+      filename?.endsWith('.tsx') ||
+      filename?.endsWith('.js') ||
+      filename?.endsWith('.jsx') ||
+      filename?.endsWith('.py')
+    ) {
+      return <FileCode className="w-3.5 h-3.5 text-blue-600/90 shrink-0" />
+    }
+    if (
+      filename?.endsWith('.json') ||
+      filename?.endsWith('.yaml') ||
+      filename?.endsWith('.yml') ||
+      filename?.endsWith('.toml') ||
+      filename?.includes('config')
+    ) {
+      return <Code2 className="w-3.5 h-3.5 text-purple-600/90 shrink-0" />
+    }
+    if (filename?.endsWith('.md') || filename?.endsWith('.txt')) {
+      return <FileText className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+    }
+    return <FileCode className="w-3.5 h-3.5 text-blue-500/90 shrink-0" />
+  }
+
+  // 兜底：Code2 代码图标
+  return <Code2 className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
 }
 
 export interface ActionStepRowProps {
@@ -141,18 +276,18 @@ export const ActionStepRow: React.FC<ActionStepRowProps> = ({
   }
 
   return (
-    <div className={`my-1.5 group select-none ${className}`}>
+    <div className={`my-0.5 group select-none ${className}`}>
       {/* Sleek single action line (1:1 with target screenshot) */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 py-1 px-1.5 rounded-lg hover:bg-neutral-100/60 cursor-pointer transition-colors w-fit max-w-full"
+        className="flex items-center gap-2 py-0.5 px-1 rounded-md hover:bg-neutral-100/60 cursor-pointer transition-colors w-fit max-w-full"
         title="点击查看执行详情"
       >
         <div className="flex items-center justify-center w-4 h-4 shrink-0">
           {icon}
         </div>
 
-        <span className="text-[13.5px] font-normal text-[#4b5563] tracking-tight truncate leading-normal">
+        <span className="text-[13px] font-normal text-[#52525b] hover:text-[#27272a] tracking-tight truncate leading-normal transition-colors">
           {title}
         </span>
 
@@ -168,7 +303,7 @@ export const ActionStepRow: React.FC<ActionStepRowProps> = ({
 
       {/* Smooth Micro-Drawer Detail on demand */}
       {isExpanded && (
-        <div className="mt-1.5 ml-6 p-3 rounded-xl border border-neutral-200/80 bg-[#f8f9fa] text-xs space-y-2 select-text transition-all">
+        <div className="mt-1.5 ml-6 p-3 rounded-xl border border-neutral-200/80 bg-[#f8f9fa] text-xs space-y-2 select-text transition-all duration-150 animate-in fade-in-0">
           <div className="flex items-center justify-between text-[11px] text-neutral-500 font-mono">
             <span>
               {toolCall.name} {result?.isError ? '• 失败' : '• 已完成'}
@@ -192,23 +327,23 @@ export const ActionStepRow: React.FC<ActionStepRowProps> = ({
           </div>
 
           {/* Diff preview for modifications */}
-          {(toolCall.name === 'replace_file_content' || toolCall.name === 'write_to_file') && (
+          {(['replace_file_content', 'edit_file', 'write_to_file', 'write_file', 'Edit', 'Write'].includes(toolCall.name)) && (
             <div className="space-y-1">
               <div className="text-[10px] uppercase font-semibold text-neutral-400">
-                修改目标：{String((toolCall.arguments as any)?.filePath || (toolCall.arguments as any)?.path || '')}
+                修改目标：{String((toolCall.arguments as any)?.filePath || (toolCall.arguments as any)?.path || (toolCall.arguments as any)?.TargetFile || '')}
               </div>
-              {toolCall.name === 'replace_file_content' ? (
+              {['replace_file_content', 'edit_file', 'Edit'].includes(toolCall.name) ? (
                 <div className="flex flex-col gap-1 font-mono text-[11px]">
                   <pre className="text-rose-600 bg-rose-50/80 border border-rose-200/80 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap">
-                    - {String((toolCall.arguments as any)?.targetContent || '')}
+                    - {String((toolCall.arguments as any)?.targetContent || (toolCall.arguments as any)?.TargetContent || '')}
                   </pre>
                   <pre className="text-emerald-600 bg-emerald-50/80 border border-emerald-200/80 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap">
-                    + {String((toolCall.arguments as any)?.replacementContent || '')}
+                    + {String((toolCall.arguments as any)?.replacementContent || (toolCall.arguments as any)?.ReplacementContent || '')}
                   </pre>
                 </div>
               ) : (
                 <pre className="text-neutral-700 bg-white border border-neutral-200/80 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono text-[11px]">
-                  {String((toolCall.arguments as any)?.content || '')}
+                  {String((toolCall.arguments as any)?.content || (toolCall.arguments as any)?.CodeContent || '')}
                 </pre>
               )}
             </div>

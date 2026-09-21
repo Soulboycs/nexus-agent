@@ -14,7 +14,26 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@genoffice/docx-engine": ["./src/packages/docx-engine/index.ts"],
+      "@genoffice/docx-engine/*": ["./src/packages/docx-engine/*"],
+      "@genoffice/font-metrics": ["./src/packages/font-metrics/index.ts"],
+      "@genoffice/font-metrics/*": ["./src/packages/font-metrics/*"],
+      "@genoffice/i18n": ["./src/packages/i18n/index.ts"],
+      "@genoffice/i18n/*": ["./src/packages/i18n/*"],
+      "@genoffice/ui": ["./src/packages/ui/index.ts"],
+      "@genoffice/ui/*": ["./src/packages/ui/*"],
+      "@genoffice/electron-utils": ["./src/packages/electron-utils/index.ts"],
+      "@genoffice/electron-utils/*": ["./src/packages/electron-utils/*"],
+      "@genoffice/ai-provider": ["./src/packages/ai-provider/index.ts"],
+      "@genoffice/ai-provider/*": ["./src/packages/ai-provider/*"],
+      "@genoffice/agent-core": ["./src/packages/agent-core/index.ts"],
+      "@genoffice/agent-core/*": ["./src/packages/agent-core/*"]
+    }
   },
   "references": [
     { "path": "./tsconfig.node.json" },

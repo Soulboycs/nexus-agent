@@ -12,13 +12,17 @@ interface AntigravityTopBarProps {
   currentConversationTitle?: string
   onToggleSidebar?: () => void
   isSidebarOpen?: boolean
+  onToggleAuxiliaryBar?: () => void
+  isAuxiliaryBarOpen?: boolean
 }
 
 export const AntigravityTopBar: React.FC<AntigravityTopBarProps> = ({
   currentProject = 'Agent',
   currentConversationTitle = 'AI Agent Reference Projects',
   onToggleSidebar,
-  isSidebarOpen = true
+  isSidebarOpen = true,
+  onToggleAuxiliaryBar,
+  isAuxiliaryBarOpen = false
 }) => {
   return (
     <header className="flex flex-col bg-white select-none shrink-0 w-full">
@@ -120,8 +124,11 @@ export const AntigravityTopBar: React.FC<AntigravityTopBarProps> = ({
 
             <button
               type="button"
-              className="p-1 rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
-              title="Toggle Auxiliary Bar"
+              onClick={onToggleAuxiliaryBar}
+              className={`p-1 rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors ${
+                isAuxiliaryBarOpen ? 'bg-neutral-100 text-blue-600' : ''
+              }`}
+              title="Toggle Word Workbench"
             >
               <PanelRight className="w-4 h-4" />
             </button>

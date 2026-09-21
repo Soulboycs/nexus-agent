@@ -5,7 +5,7 @@ import { ToolContext } from '../tools/ToolTypes'
 export interface ToolCallSpec {
   id: string
   name: string
-  arguments: Record<string, unknown>
+  arguments: Record<string, unknown> | string
 }
 
 export interface ToolBatch {
@@ -88,10 +88,16 @@ export class ToolOrchestrator {
     const executing = new Map<string, Promise<{ call: ToolCallSpec; result: ToolResultPayload }>>()
 
     while (queue.length > 0 || executing.size > 0) {
-      // Refill the pool up to maxConcurrency
+      // Refill the pool up to maxConcurrency unless aborted
       while (queue.length > 0 && executing.size < this.maxConcurrency) {
-        const call = queue.shift()!
+        const call = queue[0]
         const ctx = contextFactory(call)
+        if (ctx.signal?.aborted) {
+          queue.length = 0 // Clear pending calls on abort
+          break
+        }
+        queue.shift()
+
         const promise = this.toolRegistry
           .executeTool(call.name, call.arguments, ctx)
           .then((result) => {

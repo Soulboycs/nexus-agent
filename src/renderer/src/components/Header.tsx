@@ -1,6 +1,6 @@
 import React from 'react'
 import { FolderOpen, Settings, Square, Sparkles, Terminal } from 'lucide-react'
-import { AgentStatus } from '@shared/types'
+import { AgentStatus, ModelProvider } from '@shared/types'
 
 import { ModelSelector } from './ModelSelector'
 
@@ -9,12 +9,13 @@ interface HeaderProps {
   status: AgentStatus
   statusMessage?: string
   currentModelId: string
-  onModelChange: (modelId: string) => void
+  onModelChange: (modelId: string, providerId?: string) => void
   onSelectWorkspace: () => void
   onOpenSettings: () => void
   onAbort: () => void
   onToggleTerminal: () => void
   isTerminalOpen: boolean
+  providers?: ModelProvider[]
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,8 +28,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onAbort,
   onToggleTerminal,
-  isTerminalOpen
+  isTerminalOpen,
+  providers
 }) => {
+
   const getStatusBadge = () => {
     switch (status) {
       case 'thinking':
@@ -102,7 +105,12 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="mx-1 h-4 w-px bg-[#2f3038]" />
 
-        <ModelSelector currentModelId={currentModelId} onModelChange={onModelChange} />
+        <ModelSelector
+          currentModelId={currentModelId}
+          onModelChange={onModelChange}
+          onOpenSettings={onOpenSettings}
+          providers={providers}
+        />
 
         <div className="mx-1 h-4 w-px bg-[#2f3038]" />
 

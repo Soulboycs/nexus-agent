@@ -5,7 +5,7 @@ import { query, QueryTerminal } from '../agent/core/query'
 import { ToolOrchestrator } from '../agent/core/ToolOrchestrator'
 import { createDefaultAgentEngine } from '../main/agent/index'
 import { MockLLMProvider, OpenAICompatibleProvider } from '../main/agent/providers/LLMProvider'
-import { ProviderConfig } from '../shared/types'
+import { ProviderConfig, normalizePermissionMode, PermissionMode } from '../shared/types'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -379,7 +379,11 @@ export function startServer(port = 3456, host = process.env.SERVER_HOST || '0.0.
         if (clientMsg.type === 'permission_response') {
           const resolver = sessionState.pendingApprovals.get(clientMsg.requestId)
           if (resolver) {
-            resolver(clientMsg.allowed)
+            resolver(
+              clientMsg.updatedInput
+                ? { approved: clientMsg.allowed, updatedInput: clientMsg.updatedInput }
+                : clientMsg.allowed
+            )
             sessionState.pendingApprovals.delete(clientMsg.requestId)
           }
           broadcastToSession(sessionId, {
@@ -401,6 +405,16 @@ export function startServer(port = 3456, host = process.env.SERVER_HOST || '0.0.
           return
         }
 
+        if (clientMsg.type === 'set_permission_mode') {
+          ;(sessionState as any).permissionMode = normalizePermissionMode(clientMsg.mode)
+          broadcastToSession(sessionId, {
+            type: 'status',
+            state: 'idle',
+            message: `Permission mode set to ${(sessionState as any).permissionMode}.`,
+          })
+          return
+        }
+
         if (clientMsg.type === 'user_message') {
           const session = sessionDb.get(sessionId)
           const workDir = session?.workDir || process.cwd()
@@ -415,6 +429,16 @@ export function startServer(port = 3456, host = process.env.SERVER_HOST || '0.0.
           const orchestrator = new ToolOrchestrator(engine.getToolRegistry())
           const cfg = loadProviderConfig()
           const provider = cfg.apiKey ? new OpenAICompatibleProvider(cfg) : new MockLLMProvider()
+
+          // Security gate (review fix): the server path previously ran the
+          // query with no permission engine and no sandbox — tool-level
+          // requiresApproval was the only guard. Reuse the engine's gate stack;
+          // approval mode defaults to 'ask' per session (set_permission_mode).
+          const permissionEngine = engine.getPermissionEngine()
+          const sandboxGuard = engine.getSandboxGuard()
+          const permissionMode: PermissionMode = normalizePermissionMode(
+            (sessionState as any).permissionMode ?? session?.permissionMode
+          )
 
           // Execute query state machine
           const q = query({
@@ -431,8 +455,11 @@ export function startServer(port = 3456, host = process.env.SERVER_HOST || '0.0.
             provider,
             workspaceRoot: workDir,
             signal,
+            permissionEngine,
+            sandboxGuard,
+            permissionMode,
             onApprovalRequired: (req) => {
-              return new Promise<boolean>((resolve) => {
+              return new Promise<boolean | import('../shared/types').ApprovalVerdict>((resolve) => {
                 sessionState.pendingApprovals.set(req.id, resolve)
                 broadcastToSession(sessionId, {
                   type: 'permission_request',

@@ -1,13 +1,14 @@
 import React, { useState, useMemo, memo } from 'react'
 import { marked, Tokens } from 'marked'
-import DOMPurify from 'dompurify'
+import DOMPurify, { type Config } from 'dompurify'
 import { Check, Copy } from 'lucide-react'
 
 // DOMPurify configuration
-const SANITIZE_CONFIG: DOMPurify.Config = {
+const SANITIZE_CONFIG: Config = {
   ADD_ATTR: ['target', 'rel'],
   FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'],
-  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover']
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+  ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|docnav):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 }
 
 function getPurifier(): { sanitize: (html: string, cfg?: any) => string } {
@@ -94,18 +95,20 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ code, language: _language })
   }
 
   return (
-    <div className="relative group my-3 rounded-2xl border border-neutral-200/70 bg-[#f4f5f7] overflow-hidden text-xs transition-all">
-      {/* Floating minimalist copy button */}
-      <div className="absolute top-2.5 right-2.5 z-10">
+    <div className="relative group my-3 rounded-2xl bg-[#f3f3f3] overflow-hidden text-xs transition-all">
+      {/* Bare minimalist copy button (1:1 with reference: no white pill, no border, pure line-art icon) */}
+      <div className="absolute top-3 right-3 z-10">
         <button
           onClick={handleCopy}
-          className="flex items-center justify-center p-1.5 rounded-lg bg-white/70 hover:bg-white text-neutral-400 hover:text-neutral-700 border border-neutral-200/50 shadow-2xs transition-all opacity-80 group-hover:opacity-100"
+          className={`flex items-center justify-center p-1 text-neutral-400 hover:text-neutral-700 bg-transparent border-0 shadow-none transition-opacity duration-200 cursor-pointer ${
+            copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
           title="复制代码"
         >
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-emerald-600" />
+            <Check className="w-4 h-4 text-emerald-600" />
           ) : (
-            <Copy className="w-3.5 h-3.5" />
+            <Copy className="w-4 h-4" />
           )}
         </button>
       </div>
@@ -212,8 +215,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = memo(
       return null
     }
 
+    const handleLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const anchor = (e.target as HTMLElement).closest('a')
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (href?.startsWith('docnav://block/')) {
+        e.preventDefault()
+        e.stopPropagation()
+        const rawIndex = href.replace('docnav://block/', '')
+        const blockIndex = parseInt(rawIndex, 10)
+        if (!isNaN(blockIndex)) {
+          // 确保打开右侧工作台（派发 nexus-word-focus）
+          window.dispatchEvent(new CustomEvent('nexus-word-focus'))
+          // 派发 nexus-word-navigate-block，通知 Word 画布平滑滚动至目标块
+          window.dispatchEvent(
+            new CustomEvent('nexus-word-navigate-block', {
+              detail: { blockIndex }
+            })
+          )
+        }
+      }
+    }
+
     return (
-      <div className={`nexus-markdown ${className}`}>
+      <div className={`nexus-markdown ${className}`} onClick={handleLinkClick}>
         {renderNodes.map((node) => {
           if (node.type === 'code') {
             return <CodeBlock key={node.key} code={node.code} language={node.language} />

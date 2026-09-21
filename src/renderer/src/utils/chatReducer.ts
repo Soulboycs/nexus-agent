@@ -97,6 +97,9 @@ export type ChatAction =
   | AgentEvent
   | { type: 'start_turn'; prompt: string; turnId: string }
   | { type: 'clear' }
+  | { type: 'load_history'; messages: ChatMessage[] }
+  /** 本地记录(如 @委派回执):只追加一条非流式 user 消息,不创建 assistant 占位 */
+  | { type: 'local_note'; text: string }
 
 /**
  * Pure state reducer processing Agent streaming events in strict FIFO order.
@@ -106,9 +109,32 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   if (action.type === 'start_turn') {
     return startUserTurn(state, action.prompt, action.turnId)
   }
+  if (action.type === 'local_note') {
+    const note: ChatMessage = {
+      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role: 'user',
+      content: action.text,
+      timestamp: Date.now()
+    }
+    // 密封可能残留的流式占位(防御),然后追加本地记录
+    const sealed = state.messages.map((m) =>
+      m.isStreaming ? { ...m, isStreaming: false } : m
+    )
+    return { ...state, activeTurnId: null, messages: [...sealed, note] }
+  }
 
   if (action.type === 'clear') {
     return createInitialChatState()
+  }
+
+  if (action.type === 'load_history') {
+    return {
+      messages: (action.messages || []).map((msg) => ({
+        ...msg,
+        isStreaming: false
+      })),
+      activeTurnId: null
+    }
   }
 
   const activeId = state.activeTurnId

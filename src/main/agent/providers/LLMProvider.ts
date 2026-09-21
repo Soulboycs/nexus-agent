@@ -1,11 +1,14 @@
 import { AgentTool } from '../tools/ToolRegistry'
 import { ProviderConfig } from '@shared/types'
 import { sanitizeConversationHistory } from '../utils/messageSanitizer'
+import { resolveToolDescription, toolToJSONSchema } from '../utils/toolSchemas'
+import { fetchWithStreamingRetry } from '../utils/providerHttp'
 import { logger } from '../../utils/logger'
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content?: string
+  name?: string
   tool_call_id?: string
   tool_calls?: Array<{
     id: string
@@ -21,6 +24,18 @@ export interface LLMStreamChunk {
   thinking?: string
   content?: string
   toolCalls?: Array<{
+    id: string
+    name: string
+    arguments: string
+  }>
+  /**
+   * Tool-use blocks that are fully received mid-stream (1:1 with Claude Code's
+   * block-level streaming execution). Emitted on content_block_stop /
+   * response.output_item.done — lets the query loop start executing tools
+   * while the model is still generating. Final toolCalls on the return value
+   * remains the source of truth; consumers dedupe by id.
+   */
+  completedToolCalls?: Array<{
     id: string
     name: string
     arguments: string
@@ -56,18 +71,15 @@ export class OpenAICompatibleProvider implements ILLMProvider {
     toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
   }> {
     const baseURL = (this.config.baseURL || 'https://api.openai.com/v1').replace(/\/+$/, '')
-    const url = `${baseURL}/chat/completions`
+    const url = baseURL.endsWith('/chat/completions') ? baseURL : `${baseURL}/chat/completions`
+
 
     const formattedTools = tools.map((tool) => ({
       type: 'function',
       function: {
         name: tool.name,
-        description: tool.description,
-        parameters: {
-          type: 'object',
-          properties: (tool.parameters as any)._def?.shape ? extractZodProperties(tool.parameters) : {},
-          required: []
-        }
+        description: resolveToolDescription(tool),
+        parameters: toolToJSONSchema(tool)
       }
     }))
 
@@ -90,59 +102,23 @@ export class OpenAICompatibleProvider implements ILLMProvider {
       messageCount: sanitizedMessages.length
     })
 
-    let response: Response | undefined
-    let retries = 0
-    const maxRetries = 3
+    const response = await fetchWithStreamingRetry({
+      url,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`
+        },
+        body: JSON.stringify(body)
+      },
+      provider: 'OpenAICompatibleProvider',
+      model: this.config.model,
+      onStatusUpdate: (message) => onChunk({ statusUpdate: message }),
+      signal
+    })
 
-    while (retries <= maxRetries) {
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.config.apiKey}`
-          },
-          body: JSON.stringify(body),
-          signal
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          logger.error('OpenAICompatibleProvider', `LLM API Error (${response.status}) on ${url}: ${errorText}`, {
-            status: response.status,
-            model: this.config.model,
-            url,
-            errorResponse: errorText,
-            requestBody: body
-          })
-
-          if ((response.status === 429 || response.status >= 500) && retries < maxRetries) {
-            retries++
-            logger.warn('OpenAICompatibleProvider', `Retrying request due to status ${response.status} (attempt ${retries}/${maxRetries})`)
-            onChunk({ statusUpdate: `Rate limited or server error (${response.status}). Retrying in 2s (attempt ${retries}/${maxRetries})...` })
-            await new Promise(r => setTimeout(r, 2000))
-            continue
-          }
-          throw new Error(`LLM Provider API error (${response.status}): ${errorText}`)
-        }
-        break
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          logger.warn('OpenAICompatibleProvider', 'Request aborted by signal')
-          throw err
-        }
-        logger.warn('OpenAICompatibleProvider', `Network or fetch error: ${err.message}`, err)
-        if (retries < maxRetries) {
-          retries++
-          onChunk({ statusUpdate: `Network error: ${err.message}. Retrying in 2s (attempt ${retries}/${maxRetries})...` })
-          await new Promise(r => setTimeout(r, 2000))
-        } else {
-          throw err
-        }
-      }
-    }
-
-    if (!response || !response.body) {
+    if (!response.body) {
       throw new Error('LLM response body is empty.')
     }
 
@@ -249,19 +225,6 @@ export class OpenAICompatibleProvider implements ILLMProvider {
   }
 }
 
-function extractZodProperties(zodSchema: any): Record<string, any> {
-  const shape = zodSchema._def?.shape?.() || zodSchema._def?.shape || {}
-  const properties: Record<string, any> = {}
-  for (const [key, val] of Object.entries(shape)) {
-    const desc = (val as any).description || ''
-    properties[key] = {
-      type: 'string', // generalized representation
-      description: desc
-    }
-  }
-  return properties
-}
-
 // Mock Provider for Unit & Integration Testing (evidence-driven)
 export class MockLLMProvider implements ILLMProvider {
   private responses: Array<{
@@ -297,6 +260,11 @@ export class MockLLMProvider implements ILLMProvider {
     if (resp.toolCalls) {
       onChunk({
         toolCalls: resp.toolCalls.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: JSON.stringify(tc.arguments)
+        })),
+        completedToolCalls: resp.toolCalls.map((tc) => ({
           id: tc.id,
           name: tc.name,
           arguments: JSON.stringify(tc.arguments)
