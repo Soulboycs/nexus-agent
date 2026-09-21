@@ -53,7 +53,7 @@ export const runCommandTool: AgentTool = {
       const started = startBackgroundTask(command, context.workspaceRoot, rawArgs.description)
       return `Background task started: ${started.id}
 Command: ${command}
-Use TaskOutput with task_id "${started.id}" to read output.`
+Use TaskOutput with taskId "${started.id}" to read output.`
     }
 
     return new Promise((resolve, reject) => {

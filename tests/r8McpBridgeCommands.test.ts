@@ -1,18 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 // 真实依赖文件：word/ 子树各模块的 '../shared/ipc' 都解析到这里
-// （components/word/shared/ipc.ts 是零引用孪生，见契约 R7 过程记录）
+// （components/word/shared/ipc.ts 是零引用孪生，见契约 R8 过程记录）
 import { MCP_EDITOR_COMMANDS } from '../src/renderer/src/components/shared/ipc'
 import { AGENT_TOOLS } from '../src/renderer/src/components/word/ai/tools'
 
 /**
- * R7-A 契约测试：live 桥命令面 = 内置 AGENT_TOOLS 目录的"全部同步工具"。
+ * R8-A 契约测试：live 桥命令面 = 内置 AGENT_TOOLS 目录的"全部同步工具"。
  *
  * 捕获的真实故障：mcp-bridge 的 switch 与 AGENT_TOOLS 目录脱节——上游新增/
  * 改名工具后桥面漂移，外部 agent 调用主进程宣称的工具名在渲染层落空。
  * 判定准则直接读运行时 AGENT_TOOLS（而非硬编码名单），工具目录一变即红。
  */
 
-/** 主进程 agent 自行实现、不经 live 桥的异步/云/流式工具（契约 R7 §1） */
+/** 主进程 agent 自行实现、不经 live 桥的异步/云/流式工具（契约 R8 §1） */
 const SERVED_BY_MAIN = new Set([
   'web_search',
   'image_search',
@@ -27,7 +27,7 @@ const BRIDGE_NAME: Record<string, string> = {
   get_document_context: 'read_document',
 }
 
-describe('R7-A: MCP 桥命令面覆盖内置工具目录', () => {
+describe('R8-A: MCP 桥命令面覆盖内置工具目录', () => {
   test('命令面 = AGENT_TOOLS 同步子集 + read_document 映射 + save_document', () => {
     const expected = [
       ...AGENT_TOOLS.map((tool) => tool.name)

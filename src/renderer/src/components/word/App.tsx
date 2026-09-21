@@ -1710,7 +1710,7 @@ export function App() {
 
   // MCP bridge: let an external agent drive this visible editor. Commands arrive
   // from the shell main process and run against the live ctx (refs refresh per render).
-  // R7: the document-level AI stores (comments/notes/hf/page-setup/styles) ride in
+  // R8: the document-level AI stores (comments/notes/hf/page-setup/styles) ride in
   // through a ref that later renders fill, so the bridge reads whatever the
   // current document's panels would hand the in-app agent.
   const mcpAiAccessRef = useRef<{
@@ -5964,7 +5964,7 @@ export function App() {
     BLANK_ORDERED_NUM_ID,
   ]
 
-  // R7: keep the MCP bridge's view of the AI document stores current. Assigned
+  // R8: keep the MCP bridge's view of the AI document stores current. Assigned
   // every render (no dep array) so a mid-session document switch replaces the
   // stores before the next bridge command can observe them.
   useEffect(() => {

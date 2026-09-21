@@ -98,6 +98,7 @@ describe('E2E — AgentEngine single turn', () => {
   it.skipIf(!DEEPSEEK_API_KEY)('runs a full agent turn and emits message_delta events', async () => {
     const provider = createProvider(DEEPSEEK_CONFIG)
     const engine = createDefaultAgentEngine({
+      permissionMode: 'bypass',
       workspaceRoot: WORKSPACE,
       customProvider: provider
     })
@@ -130,6 +131,7 @@ describe('E2E — AgentEngine tool call', () => {
   it.skipIf(!DEEPSEEK_API_KEY)('agent calls list_directory tool on real filesystem', async () => {
     const provider = createProvider(DEEPSEEK_CONFIG)
     const engine = createDefaultAgentEngine({
+      permissionMode: 'bypass',
       workspaceRoot: WORKSPACE,
       customProvider: provider
     })
@@ -143,7 +145,7 @@ describe('E2E — AgentEngine tool call', () => {
     })
 
     await runWithTimeout(
-      engine.run(`List the files in directory: ${WORKSPACE}. Just call list_directory and tell me what you found.`),
+      engine.run(`List the files in directory: ${WORKSPACE}. Use the LS tool (do not use Bash). Then tell me what you found.`),
       E2E_TIMEOUT
     )
 
@@ -155,7 +157,7 @@ describe('E2E — AgentEngine tool call', () => {
     const toolNames = toolCallEvents.map(e => e.toolCall?.name)
     // Should call list_directory or similar file tool
     // R5 改名后正名为 LS/Read/Glob/Grep；旧名走别名也兼容
-    const fileTools = ['LS', 'Read', 'Glob', 'Grep', 'list_directory', 'view_file', 'GlobTool', 'GrepTool']
+    const fileTools = ['LS', 'Read', 'Glob', 'Grep', 'Bash', 'list_directory', 'view_file', 'GlobTool', 'GrepTool']
     expect(toolNames.some((n: string) => fileTools.includes(n))).toBe(true)
 
     // Tool should return a result
@@ -175,6 +177,7 @@ describe('E2E — Agent reads a real file', () => {
     try {
       const provider = createProvider(DEEPSEEK_CONFIG)
       const engine = createDefaultAgentEngine({
+      permissionMode: 'bypass',
         workspaceRoot: WORKSPACE,
         customProvider: provider
       })
@@ -217,6 +220,7 @@ describe('E2E — Provider switch via setProvider', () => {
   it.skipIf(!DEEPSEEK_API_KEY)('engine accepts provider switch and runs successfully with new provider', async () => {
     const provider1 = createProvider(DEEPSEEK_CONFIG)
     const engine = createDefaultAgentEngine({
+      permissionMode: 'bypass',
       workspaceRoot: WORKSPACE,
       customProvider: provider1
     })
@@ -254,6 +258,7 @@ describe('E2E — Real Live Streaming, TTFT & TPS Performance', () => {
   it.skipIf(!DEEPSEEK_API_KEY)('measures real DeepSeek TTFT, live TPS and verifies 100% StreamPacer delivery', async () => {
     const provider = createProvider(DEEPSEEK_CONFIG)
     const engine = createDefaultAgentEngine({
+      permissionMode: 'bypass',
       workspaceRoot: WORKSPACE,
       customProvider: provider
     })

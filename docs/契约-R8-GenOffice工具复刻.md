@@ -1,6 +1,6 @@
-# 契约 R7：GenOffice Word 工具体系 1:1 复刻融入主进程 Agent
+# 契约 R8：GenOffice Word 工具体系 1:1 复刻融入主进程 Agent
 
-- 批次：R7（承接 R4-R6 工具目录对齐系列）
+- 批次：R8（承接 R4-R6 工具目录对齐系列）
 - 日期：2026-09-21
 - 上游参照源：`D:\genoffice`（apps/docs/src/renderer/ai 为语义基准）
 - 基线证据：docs/证据链.md 证据条目 27
@@ -86,7 +86,7 @@
 
 - `bun test tests/` → 0 fail（基线 755 pass / 1 skip）。
 - `npx vitest run` → 0 fail（基线 63 pass）。
-- `npm run typecheck` → 零新增可归因 R7 文件的错误（基线 6 错固定于并行 WIP 文件，见证据条目 27）。
+- `npm run typecheck` → 零新增可归因 R8 文件的错误（基线 6 错固定于并行 WIP 文件，见证据条目 27）。
 - 新增测试文件：`tests/r7WordTools.test.ts`（工具注册/schema 契约/别名/负面参数）、`tests/docx/headless-roundtrip.test.ts`（无头全链路真实 fixture 往返）、mcp-bridge 命令面快照测试（vitest DOM 或 bun，按依赖环境定）。
 - 硬性失败阈值：任何新增测试 0 fail；headless 往返中 parseDocx 重读断言必须验证落盘字节真实变化（防假写）。
 
@@ -103,4 +103,4 @@
 
 ## 9. 切片顺序与依赖
 
-R7-A 桥接层命令面（先行，独立可测）→ R7-B Spike 0 探针 → R7-B headless 引擎 → R7-C 主进程注册 → R7-D 云/异步 → R7-E 系统提示词 → R7-F 收口。R7-C 依赖 R7-A+R7-B；R7-E 依赖 R7-C（OPS_GUIDE 动态生成需 headless docsModules）。
+R8-A 桥接层命令面（先行，独立可测）→ R8-B Spike 0 探针 → R8-B headless 引擎 → R8-C 主进程注册 → R8-D 云/异步 → R8-E 系统提示词 → R8-F 收口。R8-C 依赖 R8-A+R8-B；R8-E 依赖 R8-C（OPS_GUIDE 动态生成需 headless docsModules）。

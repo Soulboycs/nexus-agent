@@ -57,7 +57,8 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
     if (isAskUserQuestion) {
       const missing = questions.find((q) => !selections[q.question])
       if (missing) return // 必须全部作答
-      onRespond(true, undefined, { answers: selections })
+      // updatedInput 是整体替换语义：必须携带完整原参数（questions），只附加 answers
+      onRespond(true, undefined, { ...(request.arguments ?? {}), answers: selections })
       return
     }
     const updatedInput = buildUpdatedInput()

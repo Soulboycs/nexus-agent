@@ -25,7 +25,7 @@ import { save, type FileActionContext } from './file-actions'
 export interface McpBridgeDeps {
   /** live file-action context (refreshed every render by App) */
   getCtx: () => FileActionContext
-  /** document-level stores the R7 tool surface needs; wired by App, read lazily per command */
+  /** document-level stores the R8 tool surface needs; wired by App, read lazily per command */
   getComments?: () => AiCommentsAccess | undefined
   getNotes?: () => AiNotesAccess | undefined
   getHf?: () => AiHeaderFooterAccess | undefined
@@ -114,7 +114,7 @@ function toolInputOf(payload: unknown): Record<string, unknown> {
 }
 
 /**
- * Generic passthrough for the R7 tool surface: run one built-in agent tool by
+ * Generic passthrough for the R8 tool surface: run one built-in agent tool by
  * its AGENT_TOOLS name against the live editor, wired with the same document
  * stores the in-app panel hands over (comments, header/footer, page setup,
  * styles/watermark, notes). Payload may carry the bridge-level
@@ -250,7 +250,7 @@ async function runCommand(
       return { ok: true, path: input.path }
     }
 
-    // R7: every remaining sync tool of the built-in catalog runs through the
+    // R8: every remaining sync tool of the built-in catalog runs through the
     // same executeTool passthrough — validation, staleness guard and error
     // texts are the executors' own (1:1 with the in-app agent).
     case 'read_revisions':

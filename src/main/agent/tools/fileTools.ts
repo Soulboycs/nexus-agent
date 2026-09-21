@@ -100,6 +100,9 @@ export const viewFileTool: AgentTool = {
       const lines = raw.split(/\r?\n/)
       const totalLines = lines.length
 
+      // 记录 read-first 状态（mtime）——空读/超界读同样计入
+      recordFileRead(fullPath, stats.mtimeMs)
+
       if (offset > totalLines) {
         return `File: ${filePath} (${totalLines} lines)\n<system-reminder>The file is shorter than the provided offset (${offset}). It has ${totalLines} lines — read from line 1.</system-reminder>`
       }
@@ -121,9 +124,6 @@ export const viewFileTool: AgentTool = {
       if (raw.trim() === '') {
         return `<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>`
       }
-
-      // 记录 read-first 状态（mtime），供 Write/Edit 陈旧写检测
-      recordFileRead(fullPath, (await fs.stat(fullPath)).mtimeMs)
 
       let result = `${body}`
       if (end < totalLines && !limit) {

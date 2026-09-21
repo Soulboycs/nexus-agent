@@ -26,7 +26,7 @@ export function registerCronRunner(
   callback: (prompt: string, schedule: string) => Promise<void>
 ): void {
   cronRunnerCallback = callback
-  if (checkerTimer) return
+  if (checkerTimer) return // 定时器全局唯一；callback 每次都更新
   checkerTimer = setInterval(() => {
     void checkAndFire(workspaceRoot)
   }, 60_000)
@@ -156,16 +156,6 @@ export async function checkAndFire(workspaceRoot: string): Promise<string[]> {
   }
   if (dirty) saveCrons(workspaceRoot, crons)
   return fired
-}
-
-function cronFields(partial: Record<string, unknown>, id: string) {
-  return z.object({
-    id: z.literal(id),
-    prompt: z.string(),
-    schedule: z.string(),
-    createdAt: z.string(),
-    lastFiredAt: z.string().optional(),
-  }).parse(partial)
 }
 
 // ============ CronCreate ============

@@ -129,7 +129,7 @@ export const taskCreateTool: AgentTool = {
     return [
       `Background task started: ${started.id}`,
       `Command: ${command}`,
-      `Use TaskOutput with task_id "${started.id}" to read output, TaskStop to terminate, TaskList to see all tasks.`,
+      `Use TaskOutput with taskId "${started.id}" to read output, TaskStop to terminate, TaskList to see all tasks.`,
     ].join('\n')
   },
 }
