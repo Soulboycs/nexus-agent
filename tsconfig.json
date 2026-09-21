@@ -28,7 +28,11 @@
       "@genoffice/ui": ["./src/packages/ui/index.ts"],
       "@genoffice/ui/*": ["./src/packages/ui/*"],
       "@genoffice/electron-utils": ["./src/packages/electron-utils/index.ts"],
-      "@genoffice/electron-utils/*": ["./src/packages/electron-utils/*"]
+      "@genoffice/electron-utils/*": ["./src/packages/electron-utils/*"],
+      "@genoffice/ai-provider": ["./src/packages/ai-provider/index.ts"],
+      "@genoffice/ai-provider/*": ["./src/packages/ai-provider/*"],
+      "@genoffice/agent-core": ["./src/packages/agent-core/index.ts"],
+      "@genoffice/agent-core/*": ["./src/packages/agent-core/*"]
     }
   },
   "references": [
