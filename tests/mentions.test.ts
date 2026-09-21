@@ -65,3 +65,50 @@ describe('buildSessionLabel — M4 会话可区分标签(三级回退+去重)', 
     expect(buildSessionLabel('数据分析', undefined, 'sess-5678', used)).toBe('数据分析 #2')
   })
 })
+
+import { stripMentionTokens } from '../src/renderer/src/utils/mentions'
+
+describe('stripMentionTokens — M6 完整剥离带空格的会话名', () => {
+  it('M6a: 带空格的候选名整体剥离', () => {
+    const local = [...candidates, { type: 'session' as const, id: 'sess-X', name: 'Explain the project archite...' }]
+    const out = stripMentionTokens('@Explain the project archite... 这里的最新会话讲的什么', local)
+    expect(out).toBe('这里的最新会话讲的什么')
+  })
+  it('M6b: 未匹配的孤立 @token 兜底剥离', () => {
+    expect(stripMentionTokens('@unknown_task 帮我跑测试', candidates)).toBe('帮我跑测试')
+  })
+  it('M6c: 无 @ 时原样保留', () => {
+    expect(stripMentionTokens('普通问题', candidates)).toBe('普通问题')
+  })
+})
+
+import { buildSessionReferenceBlock } from '../src/renderer/src/utils/mentions'
+
+describe('buildSessionReferenceBlock — M7 会话引用块(引用语义)', () => {
+  const msgs = [
+    { id: '1', role: 'user', content: '帮我分析项目架构', timestamp: 1 },
+    { id: '2', role: 'assistant', content: '项目分为三层:入口、核心、工具层', timestamp: 2 },
+    { id: '3', role: 'user', content: '继续', timestamp: 3 }
+  ] as never[]
+
+  it('M7a: 输出标题 + 近期对话转录', () => {
+    const block = buildSessionReferenceBlock('架构分析', msgs as any)
+    expect(block).toContain('【引用会话:「架构分析」近期内容】')
+    expect(block).toContain('用户: 帮我分析项目架构')
+    expect(block).toContain('助手: 项目分为三层')
+  })
+
+  it('M7b: 预算截断:超长会话只保留近期内容且不超预算', () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({
+      id: String(i), role: i % 2 ? 'assistant' : 'user', content: 'x'.repeat(200), timestamp: i
+    }))
+    const block = buildSessionReferenceBlock('长会话', many as any, 3000)
+    expect(block.length).toBeLessThanOrEqual(3200)
+    expect(block).toContain('用户:')
+  })
+
+  it('M7c: 空会话 → (空)', () => {
+    const block = buildSessionReferenceBlock('empty', [] as never)
+    expect(block).toContain('(空)')
+  })
+})

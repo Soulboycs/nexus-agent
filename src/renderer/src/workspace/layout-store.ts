@@ -80,6 +80,8 @@ interface LayoutStoreState extends LayoutState {
   resizeSplit(groupId: string, sizes: number[]): void
   /** 启动迁移:把 __boot__ 占位 tab 指向真实会话(幂等) */
   bootstrapSession(sessionId: string): void
+  /** 一键重置:回到单 chat pane(保留当前聚焦会话) */
+  resetLayout(): void
   setHydrated(): void
 }
 
@@ -207,6 +209,27 @@ export const useLayoutStore = create<LayoutStoreState>()(
         }
         // 无占位(异常恢复)→ 常规打开
         get().openTab({ kind: 'chat', sessionId })
+      },
+
+      resetLayout() {
+        const st = get()
+        const focused = collectAllPanes(st.layout.root)
+          .flatMap((x) => x.tabs)
+          .find((t) => t.tabId === collectAllPanes(st.layout.root).find((x) => x.id === st.layout.focusedPaneId)?.focusedTabId)
+        const target =
+          focused && focused.target.kind === 'chat'
+            ? focused.target
+            : st.layout.root.kind === 'group'
+              ? undefined
+              : undefined
+        const chatSession =
+          target && 'sessionId' in target
+            ? target.sessionId
+            : collectAllPanes(st.layout.root)
+                .map((x) => x.tabs.find((t) => t.target.kind === 'chat'))
+                .filter(Boolean)
+                .map((t) => (t!.target as { sessionId: string }).sessionId)[0]
+        set(createDefaultLayout({ kind: 'chat', sessionId: chatSession || '__boot__' }, ids))
       },
 
       setHydrated() {

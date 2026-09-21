@@ -233,23 +233,22 @@ describe('NewTabPane — 落地页卡片(G7,打开标签页)', () => {
     expect(created).toBe(1)
   })
 
-  it('G7b: 点"文档"卡进入最近文档选择,选中文档 retarget 为 word', async () => {
+  it('G7b: 文档卡直达 word pane(默认空白 + 工具条),不再是死胡同', async () => {
     ;(window as any).electronAPI = { ...(window as any).electronAPI }
     localStorage.setItem('nexus_word_recent_files', JSON.stringify(['D:/docs/博士论文.docx', 'D:/docs/数据.docx']))
     renderTree()
     const st0 = useLayoutStore.getState()
     const p0 = collectAllPanes(st0.layout.root)[0]
     fireEvent.click(screen.getByTestId(`split-right-btn-${p0.id}`))
+    // 文档卡 → 直接挂载 word pane(默认空白,不进选择器)
     fireEvent.click(screen.getByTestId('new-tab-card-word'))
-    expect(screen.getByTestId('new-tab-picker-docs')).toBeTruthy()
-    const docs = screen.getAllByTestId('pick-doc')
-    expect(docs.length).toBe(2)
-    fireEvent.click(docs[0])
     const st1 = useLayoutStore.getState()
     const panes = collectAllPanes(st1.layout.root)
     const newPane = panes.find((p) => p.id !== p0.id)!
-    expect(newPane.tabs[0].target).toEqual({ kind: 'word', path: 'D:/docs/博士论文.docx' })
+    expect(newPane.tabs[0].target).toEqual({ kind: 'word', path: '' })
     expect(screen.getByTestId('word-pane')).toBeTruthy()
+    // 工具条:打开… 永远可用(不再是死胡同;最近列表已按产品要求撤除)
+    expect(screen.getByTestId('word-open-file')).toBeTruthy()
   })
 })
 

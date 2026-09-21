@@ -76,7 +76,7 @@ export function LocaleProvider({ initial, children }: { initial: Lang; children:
   const [lang, setLang] = useState<Lang>(initial)
   useEffect(
     () =>
-      window.desktop.onLanguageChanged((next) => {
+      window.desktop?.onLanguageChanged?.((next) => {
         setModuleLang(next)
         document.documentElement.lang = htmlLang(next)
         setLang(next)

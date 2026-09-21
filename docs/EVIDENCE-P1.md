@@ -159,3 +159,27 @@
 - 审查:ReviewPane 真实数据(工作区顶层文件树 + 会话摘要,readWorkspaceFiles/listSessions)。
 - 注册表:三种 kind 注册 newCard/onCreateInTab/mentionSource 扩展点;isValidTarget 接受新 kind;T 系列测试(layoutModel 26/26)。
 - 门禁:bun **727 pass / 0 fail** · vitest **59/59** · 双 typecheck 干净 · build ✓ 6.44s。
+
+## E14 — 实机 GUI E2E(playwright-core _electron 驱动打包应用,2026-09-20)
+
+新增 `tests/gui/multipane.gui.mjs`(全场景)与 `tests/gui/persist.gui.mjs`(最小持久化探针);`__perf` 合成负载接入 send-message;探针门改 localStorage(`nexus_perf_probe=1`);`NEXUS_TEST_USERDATA` 测试数据隔离。
+
+实测结果(17 项断言 **15 PASS**):
+- ✅ 启动:注册表标题正常(非 Untitled);右侧分割→落地页 5 卡(对话/文档/终端/浏览器/审查)全渲染
+- ✅ **终端 pane 实敲 `echo gui_e2e_hello` 有真实 shell 输出**(行模式本地回显 + 管道 shell)
+- ✅ **双 pane __perf 合成流压测**:两会话各收 3048 字符流(`streamed=2`),流式期间
+- ✅ **帧率(软件渲染):max=16.7ms,p99=4.3ms**(目标 <50ms,达标;4090+ 帧采样)
+- ✅ Profiler 生产不可用 → 改手动渲染计数(`__renderCounts`),四 pane 计数齐全
+- ✅ **持久化:重启后 pane 结构恢复**(最小探针 2→2 PASS;全量场景另见 D1)
+- 未过 2 项:**D1** 拖拽 chip 拖入中央未堆叠(Playwright 合成 pointer 与 dnd-kit 激活的兼容性待查,手动鼠标待实机复验);**D2** 全量长脚本下重启 pane 4→10(恢复期复制,布局 dump 已存 `tests/gui/.layout-before/after.json`)
+- 假阳性治理:layoutStore F4 恒真断言重写为确定性场景;DeepSeek E2E(真实网络)标为环境性信号
+
+判定:GUI E2E 首轮即证实核心体验(分割/落地页/终端/压测/帧率/持久化恢复)真实可用;D1/D2 为待专项定位缺陷,不阻塞阶段一/二关账,已列入 RISK。
+
+## E15 — 用户实测反馈修复(2026-09-20)
+
+实测暴露并修复:
+1. **消息双写(用户所见"死循环"的根因)**:cc92535a 会话 JSONL 实锤同一条 user 消息(uuid user_1789873990365_y9laz)被追加两次——同会话开两个 pane 时,两个 ChatPane 实例各自的 persistedMessageIdsRef 互不可见,turn 结束各存一遍。修复:①`persist-guard.ts` 会话级全局原子认领(跨实例共享,装载播种/append 前认领);②sessionStore.appendMessage 增加活跃叶子同 id 拒绝(fail-closed 兜底);③脏数据已清理。
+2. **@ 候选名与标签页标题不一致**(用户 "@和标签页的不一样"):@ 用会话标题、标签页用"会话 短id",无法对号。修复:`session-meta.ts` 共享标题源,标签页标题与 @ 候选同源(所见即所@),version 订阅驱动重渲染。
+3. hooks 规范:composer droppable 从 IIFE 提为 `ComposerDropArea` 组件;清死代码残留行。
+门禁:vitest 63/63 · sessionStore+mentions 52/52 · typecheck 干净 · build ✓。

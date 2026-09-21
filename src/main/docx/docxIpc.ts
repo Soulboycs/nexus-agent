@@ -11,7 +11,8 @@ import {
   rememberDocPassword,
   docPasswordFor
 } from './docx-encryption'
-import { buildBlankDocx, saveDocx, type ParsedDocFull, type SaveBlock, type SaveOptions } from '../../packages/docx-engine'
+import { buildBlankDocx } from '../../packages/docx-engine'
+import { zipSavePayload, type ZipSavePayload } from './docs-zip-save'
 import { installDocsBridge, notifyDocsSavedByEditor } from './docsBridge'
 import { recordRecentFile, getRecentFiles } from './docx-recent'
 
@@ -49,6 +50,19 @@ export function registerDocxIpc(getMainWindow: () => BrowserWindow | null) {
     const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (result.canceled || result.filePaths.length === 0) return null
     return loadDocx(result.filePaths[0], event.sender.id)
+  })
+
+  // 1b. Pick a docx path only (word pane 工具条"打开…":不加载,只选路径,由 tab retarget 驱动打开)
+  ipcMain.handle('docs:pick-docx-path', async (): Promise<string | null> => {
+    const win = getMainWindow()
+    const opts = {
+      title: '打开 Word 文档',
+      filters: [{ name: 'Word Documents', extensions: ['docx'] }],
+      properties: ['openFile' as const]
+    }
+    const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
   })
 
   // 2. Open by absolute path
@@ -124,26 +138,7 @@ export function registerDocxIpc(getMainWindow: () => BrowserWindow | null) {
   // 5b. Zip + DEFLATE off the renderer thread: the renderer sends the parsed
   // doc and final blocks (structured clone) and this process runs the
   // CPU-heavy compression, so saving a large document never freezes the UI
-  ipcMain.handle(
-    'docs:zip-save',
-    async (
-      _event,
-      payload: { parsed: ParsedDocFull; finalBlocks: SaveBlock[]; options?: SaveOptions }
-    ): Promise<{ ok: boolean; data?: ArrayBuffer; error?: string }> => {
-      try {
-        const bytes = await saveDocx(payload.parsed, payload.finalBlocks, payload.options ?? {})
-        return {
-          ok: true,
-          data: bytes.buffer.slice(
-            bytes.byteOffset,
-            bytes.byteOffset + bytes.byteLength
-          ) as ArrayBuffer
-        }
-      } catch (err: any) {
-        return { ok: false, error: err?.message || String(err) }
-      }
-    }
-  )
+  ipcMain.handle('docs:zip-save', (_event, payload: ZipSavePayload) => zipSavePayload(payload))
 
   // 6. Save document As
   ipcMain.handle(

@@ -356,3 +356,16 @@ describe('Chat State Machine — MessageBlock 有序时序流水线 (Interleaved
   })
 })
 
+
+describe('local_note — P4 委派本地记录(不悬空占位)', () => {
+  it('追加一条 user 角色的本地说明消息,不产生流式占位、不影响 activeTurnId', async () => {
+    const { chatReducer, createInitialChatState } = await import('../src/renderer/src/utils/chatReducer')
+    let st = createInitialChatState()
+    st = chatReducer(st, { type: 'local_note', text: '已委派给会话 X: 帮我审查' } as never)
+    expect(st.messages.length).toBe(1)
+    expect(st.messages[0].role).toBe('user')
+    expect(st.messages[0].content).toContain('已委派给会话 X')
+    expect(st.activeTurnId).toBeNull()
+    expect(st.messages[0].isStreaming ?? false).toBe(false)
+  })
+})

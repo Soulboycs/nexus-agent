@@ -282,6 +282,8 @@ export interface DesktopApi {
   onZoteroRequest(handler: (request: ZoteroRendererRequest) => void): () => void
   respondToZotero(response: ZoteroRendererResponse): void
   openDocx(): Promise<OpenDocxResult>
+  /** 仅弹文件选择框返回路径(word pane 工具条) */
+  pickDocxPath?(): Promise<string | null>
   openDocxPath(path: string): Promise<OpenDocxResult>
   /** decrypt-and-open a password-protected docx (path from a needsPassword result) */
   openDocxDecrypt(path: string, password: string): Promise<DecryptOpenResult>

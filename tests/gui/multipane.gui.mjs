@@ -8,6 +8,7 @@ import { _electron as electron } from 'playwright-core'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { writeFileSync as ioWriteFileSync } from 'node:fs'
 
 const results = []
 const ok = (name, pass, extra = '') => {
@@ -23,10 +24,11 @@ const app = await electron.launch({
   cwd: process.cwd(),
   env: { ...process.env, NEXUS_TEST_USERDATA: userData }
 })
+app.process().stdout?.on('data', (d) => { const t = d.toString(); if (t.includes('TEMP')) console.log('[main1]', t.slice(0, 150)) })
 const win = await app.firstWindow()
 app.process().stdout?.on('data', (d) => { const t = d.toString(); if (/error|warn|DOC_CONFLICT|NO_LIVE/i.test(t)) console.log('[main]', t.slice(0, 200)) })
 win.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 200)))
-win.on('console', (m) => { if (m.type() === 'error') console.log('[console]', m.text().slice(0, 200)) })
+win.on('console', (m) => { if (m.type() === 'error' || m.text().includes('TEMP-D2')) console.log('[console]', m.text().slice(0, 160)) })
 await win.waitForLoadState('domcontentloaded')
 
 // 启用性能探针(应用读取 localStorage 门)
@@ -108,12 +110,12 @@ try {
   }
   for (let t = 0; t < 5; t++) {
     await win.waitForTimeout(2000)
-    const lens = []
     for (const sid of ids.slice(0, 2)) {
-      const txt = await win.locator(`[data-testid="chat-pane-${sid}"]`).textContent()
-      lens.push((txt || '').length)
+      const loc = win.locator(`[data-testid="chat-pane-${sid}"]`)
+      const vis = await loc.isVisible().catch(() => 'gone')
+      const txt = ((await loc.textContent().catch(() => '')) || '').replace(/\s+/g, ' ')
+      console.log(`INFO poll${t} [${sid.slice(0, 8)}] vis=${vis} len=${txt.length} head=${JSON.stringify(txt.slice(0, 90))}`)
     }
-    console.log(`INFO poll${t}: pane 文本长度 = ${lens.join(',')}`)
   }
   const probe = await win.evaluate(() => window.__frameProbe?.stats?.() ?? null)
   ok(
@@ -159,19 +161,36 @@ try {
   // 持久化:重启应用 → pane 数恢复
   const panesBeforeClose = await paneCount()
   console.log('INFO 关闭前 pane testids =', await win.locator('[data-testid^="pane-"]:has([data-testid^="tabbar-"])').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')).join(',')))
-  console.log('INFO 关闭前 layout 存档 =', (await win.evaluate(() => (localStorage.getItem('nexus_workspace_layout') || '').slice(0, 120))))
+  const layoutRaw = await win.evaluate(() => localStorage.getItem('nexus_workspace_layout') || '')
+  ioWriteFileSync('tests/gui/.layout-before.json', layoutRaw)
+  console.log('INFO 关闭前 layout 长度 =', layoutRaw.length)
   await app.close()
   const app2 = await electron.launch({
     args: ['out/main/index.js'],
     cwd: process.cwd(),
     env: { ...process.env, APPDATA: userData }
   })
+  await app2.context().addInitScript(() => {
+    const orig = localStorage.setItem.bind(localStorage)
+    window.__lsLog = []
+    localStorage.setItem = (k, v) => {
+      if (k === 'nexus_workspace_layout') window.__lsLog.push((v || '').length)
+      orig(k, v)
+    }
+  })
   const win2 = await app2.firstWindow()
+  win2.on('console', (m) => { if (m.text().includes('TEMP-D2')) console.log('[app2]', m.text().slice(0, 160)) })
   await win2.waitForSelector('[data-testid="split-renderer"]', { timeout: 20000 })
+  console.log('[app2] t0 raw layout len =', await win2.evaluate(() => (localStorage.getItem('nexus_workspace_layout') || '').length))
+  await win2.waitForTimeout(1000)
+  console.log('[app2] t1 raw layout len =', await win2.evaluate(() => (localStorage.getItem('nexus_workspace_layout') || '').length))
+  console.log('[app2] 写入历史 =', await win2.evaluate(() => (window.__lsLog || []).join(',')))
   await win2.waitForTimeout(2000)
   const panesAfter = await win2.locator('[data-testid^="pane-"]:has([data-testid^="tabbar-"])').count()
   console.log('INFO 重启后 pane testids =', await win2.locator('[data-testid^="pane-"]:has([data-testid^="tabbar-"])').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')).join(',')))
-  console.log('INFO 重启后 layout 存档 =', (await win2.evaluate(() => (localStorage.getItem('nexus_workspace_layout') || '').slice(0, 200))))
+  const layoutRaw2 = await win2.evaluate(() => localStorage.getItem('nexus_workspace_layout') || '')
+  ioWriteFileSync('tests/gui/.layout-after.json', layoutRaw2)
+  console.log('INFO 重启后 layout 长度 =', layoutRaw2.length)
   ok('持久化:重启后 pane 结构恢复', panesAfter === panesBeforeClose, `before=${panesBeforeClose} after=${panesAfter}`)
   await app2.close()
 } catch (err) {

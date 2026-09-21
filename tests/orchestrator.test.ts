@@ -108,7 +108,7 @@ describe('ToolOrchestrator - Concurrency Partitioning & Execution Tests', () => 
     expect(peakConcurrency).toBeLessThanOrEqual(4)
   })
 
-  it('correctly partitions REAL built-in tools (view_file, list_directory, GlobTool, GrepTool, docx_read vs write_to_file)', () => {
+  it('correctly partitions REAL built-in tools (Read/LS/Glob/Grep vs Write, 1:1 cc 正名)', () => {
     const registry = new ToolRegistry()
     registry.registerTool(viewFileTool)
     registry.registerTool(listDirectoryTool)
@@ -121,10 +121,10 @@ describe('ToolOrchestrator - Concurrency Partitioning & Execution Tests', () => 
 
     // Sequence of real calls: 3 read tools, 1 write tool, 2 read tools
     const batches = orchestrator.partition([
-      { id: '1', name: 'view_file', arguments: { filePath: 'a.txt' } },
-      { id: '2', name: 'list_directory', arguments: { dirPath: '.' } },
-      { id: '3', name: 'GlobTool', arguments: { pattern: '*.ts' } },
-      { id: '4', name: 'write_to_file', arguments: { filePath: 'out.txt', content: 'hello' } },
+      { id: '1', name: 'Read', arguments: { file_path: 'a.txt' } },
+      { id: '2', name: 'LS', arguments: { dirPath: '.' } },
+      { id: '3', name: 'Glob', arguments: { pattern: '*.ts' } },
+      { id: '4', name: 'Write', arguments: { file_path: 'out.txt', content: 'hello' } },
       { id: '5', name: 'GrepTool', arguments: { pattern: 'test' } },
       { id: '6', name: 'docx_read', arguments: { filePath: 'doc.docx' } }
     ])
@@ -133,11 +133,11 @@ describe('ToolOrchestrator - Concurrency Partitioning & Execution Tests', () => 
 
     // Batch 1: Real read-only tools combined concurrently
     expect(batches[0].isConcurrencySafe).toBe(true)
-    expect(batches[0].calls.map((c) => c.name)).toEqual(['view_file', 'list_directory', 'GlobTool'])
+    expect(batches[0].calls.map((c) => c.name)).toEqual(['Read', 'LS', 'Glob'])
 
     // Batch 2: Real mutating write tool isolated serially
     expect(batches[1].isConcurrencySafe).toBe(false)
-    expect(batches[1].calls.map((c) => c.name)).toEqual(['write_to_file'])
+    expect(batches[1].calls.map((c) => c.name)).toEqual(['Write'])
 
     // Batch 3: Real read-only tools combined concurrently
     expect(batches[2].isConcurrencySafe).toBe(true)

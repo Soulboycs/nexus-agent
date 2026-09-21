@@ -49,3 +49,20 @@ describe('computeChipInsertion — D2 tab 行内插入索引', () => {
     expect(computeChipInsertion(9999, chipRects, -1)).toBe(3)
   })
 })
+
+import { resolveTabBarMode } from '../src/renderer/src/workspace/drag-geometry'
+
+describe('resolveTabBarMode — M5 标签栏分级自适应(× 永远可见)', () => {
+  it('M5a: 宽 ≥300 → comfortable(完整形态)', () => {
+    expect(resolveTabBarMode(300)).toBe('comfortable')
+    expect(resolveTabBarMode(520)).toBe('comfortable')
+  })
+  it('M5b: 180 ≤ 宽 <300 → narrow(藏分割图标,标题截断,× 可见)', () => {
+    expect(resolveTabBarMode(299)).toBe('narrow')
+    expect(resolveTabBarMode(180)).toBe('narrow')
+  })
+  it('M5c: 宽 <180 → tiny(标题缩为图标,× 缩小仍可见)', () => {
+    expect(resolveTabBarMode(179)).toBe('tiny')
+    expect(resolveTabBarMode(80)).toBe('tiny')
+  })
+})

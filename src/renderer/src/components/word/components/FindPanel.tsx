@@ -136,11 +136,14 @@ export function FindPanel({ editor, onClose, focusFindNonce, focusReplaceNonce }
   const refresh = useCallback(
     (q: string, keepIndex = 0, opts?: Partial<FindOptions>) => {
       const base = findMatches(editor, q, { matchCase, wholeWord, useWildcards, ...opts })
+      // TEMP DEBUG (remove)
+      console.log('[refresh-debug] q=', JSON.stringify(q), 'base=', base.length, 'findFmt=', JSON.stringify(findFmt))
       const ranges = isEmptyFormat(findFmt)
         ? base
         : q
           ? filterRangesByFormat(editor, base, findFmt)
           : findFormatRanges(editor, findFmt)
+      console.log('[refresh-debug] ranges=', ranges.length)
       const active = ranges.length === 0 ? 0 : Math.min(keepIndex, ranges.length - 1)
       setMatches(ranges)
       setIndex(active)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Sparkles } from 'lucide-react'
 import type { AgentEvent, AgentStatus, ApprovalRequest } from '@shared/types'
 import { extractSessionTitle } from '@shared/sessionUtils'
@@ -10,11 +10,14 @@ import { useSessionChat } from '../../hooks/useSessionChat'
 import { sessionEventBus } from '../../utils/sessionEventBus'
 import { useLayoutStore } from '../layout-store'
 import { useLinkageStore } from '../linkage-store'
+import { seedPersisted, tryClaimPersist } from '../persist-guard'
+import { useSessionMetaStore } from '../session-meta'
+import { normalizeKeyPath } from '@shared/paths'
 import { useDroppable } from '@dnd-kit/core'
 import { findPaneById, collectAllPanes as collectPanes } from '../layout-model'
 import { usePaneHost } from '../pane-host-context'
 import { getSessionWordDoc, getRecentWordFiles } from '../../components/word/persistence'
-import { resolveMentions, buildSessionLabel, type MentionCandidate } from '../../utils/mentions'
+import { resolveMentions, stripMentionTokens, buildSessionReferenceBlock, buildSessionLabel, type MentionCandidate } from '../../utils/mentions'
 import type { TabContentProps } from '../tab-registry'
 import type { TabTarget } from '../layout-model'
 
@@ -58,6 +61,8 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
         if (cancelled || !session) return
         setTitle(session.title || 'New Conversation')
         persistedMessageIdsRef.current = new Set((session.messages || []).map((m) => m.id))
+        seedPersisted(sessionId, (session.messages || []).map((m) => m.id))
+        useSessionMetaStore.getState().setSessionTitle(sessionId, session.title || 'New Conversation')
         dispatch({ type: 'load_history', messages: session.messages || [] })
         const boundDoc = getSessionWordDoc(sessionId)
         if (boundDoc) {
@@ -147,7 +152,10 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
           const fp = (event.toolCall.arguments as { filePath?: string })?.filePath
           if (fp) {
             link.setLastTouch(fp, sessionId)
-            if (!link.isSuppressed(fp)) placeWordTab(fp)
+            // 暂停跟随(§6.5):该文档的 word tab 已存在且被暂停 → 只记角标,不跳转不抢焦点
+            const existingTabId = link.pathToTab[normalizeKeyPath(fp)]
+            const paused = existingTabId ? link.followPaused[existingTabId] === true : false
+            if (!link.isSuppressed(fp) && !paused) placeWordTab(fp)
           }
         }
       } else if (event.type === 'tool_call_complete') {
@@ -206,7 +214,7 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
     try {
       for (const msg of msgs) {
         if (msg.isStreaming) continue
-        if (persistedMessageIdsRef.current.has(msg.id)) continue
+        if (!tryClaimPersist(sessionId, msg.id)) continue
         const ok = await window.electronAPI?.appendMessage?.(sessionId, msg)
         if (ok) persistedMessageIdsRef.current.add(msg.id)
       }
@@ -225,18 +233,39 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
           await window.electronAPI?.abort?.(sessionId)
         } catch {}
       }
+      // @ 引用语义(§6.7):@会话 = 把该会话近期内容作为上下文拉进本任务,由本会话 agent 回答。
+      // 不委派、不跨 pane;被引用会话只是素材。
+      const resolvedEarly = resolveMentions(prompt, mentionCandidates)
+      const referencedSessionIds = resolvedEarly.delegatedSessionIds
+      const cleanPrompt = stripMentionTokens(prompt, mentionCandidates) || prompt
       const now = Date.now()
       scrollFollowerRef.current?.forceFollow()
+
+      // 组装引用上下文块(每个被引用会话一份,受预算约束)
+      let referenceContext = ''
+      for (const rid of referencedSessionIds) {
+        try {
+          const ref = await window.electronAPI?.getSession?.(rid)
+          if (ref?.messages?.length) {
+            referenceContext += '\n\n' + buildSessionReferenceBlock(ref.title || '会话', ref.messages)
+          }
+        } catch {}
+      }
+      if (referencedSessionIds.length > 0 && !referenceContext) {
+        referenceContext = '\n\n(引用的会话暂无可读内容)'
+      }
+
       dispatch({ type: 'start_turn', prompt, turnId: `asst_${now}_${Math.random().toString(36).slice(2, 6)}` })
       setPromptInput('')
 
       if (!title || title === 'New Conversation' || title === 'New Session') {
         const derived = extractSessionTitle([{ id: 'temp', role: 'user', content: prompt, timestamp: now }])
         setTitle(derived)
+        useSessionMetaStore.getState().setSessionTitle(sessionId, derived)
       }
 
       // Word 活动文档上下文注入(沿用单实例 __aidocs;阶段三改 per-chip 预算)
-      let outgoingPrompt = prompt
+      let outgoingPrompt = cleanPrompt
       const aidocs = (window as unknown as Record<string, unknown>).__aidocs as
         | { getFilePath?: () => string | undefined; filePath?: string; getDocumentContext?: () => string }
         | undefined
@@ -251,26 +280,10 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
       }
 
       try {
-        // P4 委派(§6.6 L3):@会话 → 任务发给目标会话(带来源标注),聚焦其 pane
-        const resolved = resolveMentions(prompt, mentionCandidates)
-        if (resolved.delegatedSessionIds.length === 0 && resolved.docPaths.length > 0) {
-          // F3:@仅文档 → 上下文随本会话任务注入(评审缺口修复)
-          outgoingPrompt += '\n\n【涉及文档】(可直接用 docx 工具读写):\n' + resolved.docPaths.map((p) => '- ' + p).join('\n')
-        }
-        if (resolved.delegatedSessionIds.length > 0) {
-          const docLines = resolved.docPaths.length
-            ? '\n\n【涉及文档】:\n' + resolved.docPaths.map((p) => '- ' + p).join('\n')
-            : ''
-          for (const sid of resolved.delegatedSessionIds) {
-            await window.electronAPI?.sendMessage?.(
-              `【来自会话 ${sessionId} 的委派】\n${outgoingPrompt}${docLines}`,
-              host.workspace || undefined,
-              sid
-            )
-          }
-          setPromptInput('')
-          useLayoutStore.getState().openTab({ kind: 'chat', sessionId: resolved.delegatedSessionIds[0] })
-          return
+        // @仅文档 → 上下文随本会话任务注入(评审缺口修复)
+        const resolvedDocs = resolveMentions(prompt, mentionCandidates)
+        if (resolvedDocs.delegatedSessionIds.length === 0 && resolvedDocs.docPaths.length > 0) {
+          outgoingPrompt += '\n\n【涉及文档】(可直接用 docx 工具读写):\n' + resolvedDocs.docPaths.map((p) => '- ' + p).join('\n')
         }
         await window.electronAPI?.sendMessage?.(outgoingPrompt, host.workspace || undefined, sessionId)
       } catch (err) {
@@ -348,42 +361,47 @@ export function ChatPane({ target, active }: TabContentProps<Extract<TabTarget, 
         </div>
       )}
 
-      {(() => {
-        const composerDrop = useDroppable({
-          id: `composer:${sessionId}`,
-          data: { kind: 'composer', sessionId }
-        })
-        return (
-        <div
-          ref={composerDrop.setNodeRef}
-          className={`shrink-0 ${composerDrop.isOver ? 'ring-2 ring-inset ring-blue-300 rounded-b-2xl' : ''}`}
-          data-testid={`composer-drop-${sessionId}`}
-        >
-      <FloatingInputDock
-        promptInput={promptInput}
-        onChange={(e) => setPromptInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            void submitPrompt(promptInput)
-          }
-        }}
-        onSend={() => void submitPrompt(promptInput)}
-        onAbort={handleAbort}
-        onScrollToBottom={() => scrollFollowerRef.current?.forceFollow()}
-        currentModelId={host.currentModelId}
-        currentProviderId={host.currentProviderId}
-        onModelChange={host.onModelChange}
-        status={status}
-        onOpenSettings={host.onOpenSettings}
-        providers={host.providers}
-        permissionMode={host.permissionMode}
-        onPermissionModeChange={host.onPermissionModeChange}
-        mentionCandidates={mentionCandidates}
-      />
-        </div>
-        )
-      })()}
+      <ComposerDropArea sessionId={sessionId}>
+        <FloatingInputDock
+          promptInput={promptInput}
+          onChange={(e) => setPromptInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              void submitPrompt(promptInput)
+            }
+          }}
+          onSend={() => void submitPrompt(promptInput)}
+          onAbort={handleAbort}
+          onScrollToBottom={() => scrollFollowerRef.current?.forceFollow()}
+          currentModelId={host.currentModelId}
+          currentProviderId={host.currentProviderId}
+          onModelChange={host.onModelChange}
+          status={status}
+          onOpenSettings={host.onOpenSettings}
+          providers={host.providers}
+          permissionMode={host.permissionMode}
+          onPermissionModeChange={host.onPermissionModeChange}
+          mentionCandidates={mentionCandidates}
+        />
+      </ComposerDropArea>
+    </div>
+  )
+}
+
+/** composer 落点区(§6.7/条目28):拖会话 tab 到输入框 = 引用该会话 */
+function ComposerDropArea({ sessionId, children }: { sessionId: string; children: React.ReactNode }) {
+  const composerDrop = useDroppable({
+    id: `composer:${sessionId}`,
+    data: { kind: 'composer', sessionId }
+  })
+  return (
+    <div
+      ref={composerDrop.setNodeRef}
+      className={`shrink-0 ${composerDrop.isOver ? 'ring-2 ring-inset ring-blue-300 rounded-b-2xl' : ''}`}
+      data-testid={`composer-drop-${sessionId}`}
+    >
+      {children}
     </div>
   )
 }

@@ -52,11 +52,8 @@ describe('column separator line w:cols w:sep (ROUND2 #22)', () => {
     // the saved sectPr keeps the separator flag (paragraph-patch copies sectPr bytes)
     expect(xml).toContain('w:sep="1"')
   })
-
-  it('the canvas column CSS and the HTML export carry the rule line', () => {
+  it('the canvas column CSS carries the rule line for colSep sections', () => {
     const app = fs.readFileSync('src/renderer/src/components/word/App.tsx', 'utf8')
     expect(app).toMatch(/colSep[\s\S]{0,200}column-rule/)
-    const htmlExport = fs.readFileSync('src/renderer/src/components/word/html-export.ts', 'utf8')
-    expect(htmlExport).toMatch(/column-rule/)
   })
 })

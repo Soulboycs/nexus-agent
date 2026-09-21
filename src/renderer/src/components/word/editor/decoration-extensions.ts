@@ -1215,7 +1215,7 @@ export const ParaMarkDelExtension = Extension.create({
 
 // ---- pPrChange (tracked paragraph format) rendering extension ----
 
-const pPrChangePluginKey = new PluginKey<DecorationSet>('pPrChange')
+export const pPrChangePluginKey = new PluginKey<DecorationSet>('pPrChange')
 
 export const PPrChangeExtension = Extension.create({
   name: 'pPrChange',

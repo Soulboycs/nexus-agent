@@ -1371,6 +1371,11 @@ export class SessionStore {
       const meta = await this.readMetaOnly(filePath)
       if (!meta) return false
 
+      // 1.5 终极去重(轻量):与当前活跃叶子同 id 的追加直接拒绝(双写兜底)
+      if (message.id && meta.activeLeafId === message.id) {
+        return false
+      }
+
       // 2. DAG automatic chaining: if parentId is undefined, link to current activeLeafId
       if (message.parentId === undefined) {
         message.parentId = meta.activeLeafId || null

@@ -24,7 +24,11 @@ export function ImageWrapPopover({ editor }: { editor: Editor }) {
     if (!editor.isEditable) return null
     const dom = editor.view.nodeDOM(selection.from) as HTMLElement | null
     if (!dom) return null
-    return { pos: selection.from, wrap: (node.attrs.imageWrap as string | null) ?? null }
+    return {
+      pos: selection.from,
+      wrap: (node.attrs.imageWrap as string | null) ?? null,
+      node,
+    }
     // recompute when the selection identity changes
   }, [editor, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -72,6 +76,10 @@ export function ImageWrapPopover({ editor }: { editor: Editor }) {
   if (!info || !anchor) return null
 
   const apply = (wrap: string | null) => {
+    // markup the node at the KNOWN position: chain().focus() normalizes a
+    // NodeSelection to a text cursor when the editor view is not focused
+    // (true right after the user clicks this popover), which would silently
+    // retarget updateAttributes to nothing
     const attrs: Record<string, unknown> =
       wrap === null
         ? {
@@ -82,8 +90,12 @@ export function ImageWrapPopover({ editor }: { editor: Editor }) {
             imageOffsetYEmu: null,
           }
         : { imageWrap: wrap }
+    const tr = editor.state.tr.setNodeMarkup(info.pos, undefined, {
+      ...(info.node?.attrs ?? {}),
+      ...attrs,
+    })
+    editor.view.dispatch(tr)
     editor.view.focus()
-    editor.chain().focus().updateAttributes('docProtected', attrs).run()
   }
 
   return (

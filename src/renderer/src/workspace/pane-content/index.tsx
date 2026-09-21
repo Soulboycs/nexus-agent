@@ -1,6 +1,7 @@
 import { MessageSquareText, FileText, TerminalSquare, Globe, ListChecks } from 'lucide-react'
 import { registerTabKind } from '../tab-registry'
 import { useLayoutStore } from '../layout-store'
+import { useSessionMetaStore } from '../session-meta'
 import { ChatPane } from './ChatPane'
 import { WordPane } from './WordPane'
 import { NewTabPane } from './NewTabPane'
@@ -15,7 +16,11 @@ import { ReviewPane } from './ReviewPane'
 export function registerBuiltinTabs(): void {
   registerTabKind({
     kind: 'chat',
-    title: (t) => `会话 ${String(t.sessionId).slice(0, 8)}`,
+    // 与 @ 提及候选同源(session-meta):所见即所@;装载前回退短 id
+    title: (t) => {
+      const meta = useSessionMetaStore.getState().titles[t.sessionId]
+      return meta ? meta.slice(0, 16) : `会话 ${String(t.sessionId).slice(0, 8)}`
+    },
     component: ChatPane,
     sidebarSection: 'sessions',
     newCard: { title: '辅助对话', icon: <MessageSquareText className="w-5 h-5" />, description: '新的 Agent 会话' },

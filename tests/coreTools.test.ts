@@ -84,9 +84,9 @@ describe('R5 — TodoWrite', () => {
     const saved = JSON.parse(fs.readFileSync(path.join(workspace, '.nexus', 'todos.json'), 'utf-8'))
     expect(saved.todos.length).toBe(3)
     expect(saved.todos[1].status).toBe('in_progress')
-    expect(String(result)).toContain('[x] Implement parser')
-    expect(String(result)).toContain('[~] Write tests (Writing tests)')
-    expect(String(result)).toContain('[ ] Ship')
+    expect(saved.todos[1].activeForm).toBe('Writing tests')
+    // R7 对齐 cc：固定确认语（不回显列表）
+    expect(String(result)).toContain('Todos have been modified successfully')
   })
 
   it('负向：多个 in_progress 拒绝执行且不落盘', async () => {
@@ -95,8 +95,8 @@ describe('R5 — TodoWrite', () => {
       await todoWriteTool.execute!(
         {
           todos: [
-            { content: 'a', status: 'in_progress' },
-            { content: 'b', status: 'in_progress' },
+            { content: 'a', status: 'in_progress', activeForm: 'doing a' },
+            { content: 'b', status: 'in_progress', activeForm: 'doing b' },
           ],
         } as any,
         { workspaceRoot: workspace } as any

@@ -10,6 +10,7 @@ import {
 } from '../../src/packages/docx-engine/index'
 import { buildDocx } from './helpers/build-docx'
 import { zipDocxBytes } from '../../src/renderer/src/components/word/zip-save'
+import { zipSavePayload } from '../../src/main/docx/docs-zip-save'
 
 const originalOrder = (doc: ParsedDocFull): SaveBlock[] =>
   doc.blocks
@@ -36,13 +37,21 @@ async function zipEntries(bytes: Uint8Array): Promise<Record<string, string>> {
 }
 
 describe('zip-save IPC (MS Word P1 alignment: save never freezes the renderer)', () => {
-  it('registers the docs:zip-save handler in the main process and routes it to the engine', () => {
-    const code = fs.readFileSync(
-      path.resolve('src/main/docx/docxIpc.ts'),
-      'utf8',
+  it('the REAL main-process handler (docs-zip-save.ts) produces engine-identical output', async () => {
+    // docxIpc registers zipSavePayload verbatim, so calling it directly IS the
+    // production code path minus the electron transport layer
+    const parsed = await parseDocx(
+      await buildDocx({ bodyXml: '<w:p><w:r><w:t>handler</w:t></w:r></w:p>' }),
     )
-    expect(code).toContain("ipcMain.handle(\n    'docs:zip-save'")
-    expect(code).toMatch(/await saveDocx\(payload\.parsed, payload\.finalBlocks, payload\.options/)
+    const blocks = originalOrder(parsed)
+    const result = await zipSavePayload({ parsed, finalBlocks: blocks, options: {} })
+    expect(result.ok).toBe(true)
+    const local = await saveDocx(parsed, blocks, {})
+    const handlerZip = await JSZip.loadAsync(new Uint8Array(result.data!))
+    const localZip = await JSZip.loadAsync(local)
+    expect(await handlerZip.file('word/document.xml')!.async('string')).toBe(
+      await localZip.file('word/document.xml')!.async('string'),
+    )
   })
 
   it('binds zipSave in the preload bridge and declares it in the renderer bridge types', () => {

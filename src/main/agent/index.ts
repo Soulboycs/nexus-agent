@@ -20,6 +20,7 @@ import {
   docxRejectRevisionsTool
 } from './tools/docxTools'
 import { createAgentTool } from './tools/agentTool'
+import { createSessionReadTool, createSessionListTool } from './tools/sessionTools'
 import { createToolSearchTool, ToolSearchManager } from './tools/ToolSearchTool'
 import { notebookEditTool } from './tools/notebookTool'
 import { askUserQuestionTool } from './tools/askUserQuestionTool'
@@ -27,6 +28,7 @@ import { enterPlanModeTool, exitPlanModeTool } from './tools/planModeTools'
 import { skillTool } from './tools/skillTool'
 import { taskCreateTool, taskListTool, taskOutputTool, taskStopTool } from './tools/taskTools'
 import { connectMcpServers } from './tools/mcpTools'
+import { cronCreateTool, cronListTool, cronDeleteTool, cronUpdateTool, registerCronRunner } from './tools/cronTools'
 import { todoWriteTool, webFetchTool, webSearchTool } from './tools/coreTools'
 
 
@@ -78,6 +80,12 @@ export function createDefaultAgentEngine(options: AgentEngineOptions): AgentEngi
   registry.registerTool(taskListTool)
   registry.registerTool(taskOutputTool)
   registry.registerTool(taskStopTool)
+
+  // R7 Cron 四件套（1:1 cc ScheduleCronTool 家族，核心版）
+  registry.registerTool(cronCreateTool)
+  registry.registerTool(cronListTool)
+  registry.registerTool(cronDeleteTool)
+  registry.registerTool(cronUpdateTool)
 
   // R6 MCP 客户端：.nexus/mcp.json 的 stdio server 工具动态注册（后台，不阻塞启动）
   void connectMcpServers(process.cwd(), registry).then((summary) => {

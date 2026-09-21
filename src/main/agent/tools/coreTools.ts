@@ -11,13 +11,13 @@ import { AgentTool } from './ToolRegistry'
 // ============ TodoWrite（1:1 cc TodoWrite） ============
 
 const todoItemSchema = z.object({
-  content: z.string().min(1).describe('The task description'),
+  content: z.string().min(1).describe('The task description (imperative form, e.g. "Run tests")'),
   status: z
     .enum(['pending', 'in_progress', 'completed'])
     .describe('Task state: pending | in_progress | completed'),
   activeForm: z
     .string()
-    .optional()
+    .min(1)
     .describe('Present-tense form shown while in_progress (e.g. "Running tests")'),
 })
 
@@ -42,17 +42,17 @@ export const todoWriteTool: AgentTool = {
     const dir = path.join(context.workspaceRoot, '.nexus')
     await fs.promises.mkdir(dir, { recursive: true })
     const file = path.join(dir, 'todos.json')
+
+    // 1:1 cc：全部 completed 时存储清空（保留输出回显语义）
+    const allCompleted = todos.length > 0 && todos.every((t) => t.status === 'completed')
     const payload = {
       updatedAt: new Date().toISOString(),
-      todos,
+      todos: allCompleted ? [] : todos,
     }
     await fs.promises.writeFile(file, JSON.stringify(payload, null, 2), 'utf-8')
 
-    const lines = todos.map((t) => {
-      const mark = t.status === 'completed' ? '[x]' : t.status === 'in_progress' ? '[~]' : '[ ]'
-      return `${mark} ${t.content}${t.status === 'in_progress' && t.activeForm ? ` (${t.activeForm})` : ''}`
-    })
-    return `Todo list updated (${todos.length} items, saved to .nexus/todos.json):\n${lines.join('\n')}`
+    // 1:1 cc 固定确认语（不回显列表，省上下文）
+    return 'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
   },
 }
 

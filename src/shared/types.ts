@@ -242,6 +242,8 @@ export interface IElectronAPI {
 
 export interface IDocsAPI {
   openDocx: () => Promise<any>
+  /** 仅弹文件选择框返回路径(word pane 工具条;实际打开由 tab retarget 驱动) */
+  pickDocxPath?: () => Promise<string | null>
   openDocxPath: (path: string) => Promise<any>
   openDocxDecrypt: (path: string, password: string) => Promise<any>
   createBlankDoc: () => Promise<ArrayBuffer>

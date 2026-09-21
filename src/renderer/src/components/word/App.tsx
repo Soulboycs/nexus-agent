@@ -1710,9 +1710,26 @@ export function App() {
 
   // MCP bridge: let an external agent drive this visible editor. Commands arrive
   // from the shell main process and run against the live ctx (refs refresh per render).
+  // R7: the document-level AI stores (comments/notes/hf/page-setup/styles) ride in
+  // through a ref that later renders fill, so the bridge reads whatever the
+  // current document's panels would hand the in-app agent.
+  const mcpAiAccessRef = useRef<{
+    comments?: AiCommentsAccess
+    notes?: AiNotesAccess
+    hf?: AiHeaderFooterAccess
+    pageSetup?: AiPageSetupAccess
+    extras?: AiDocExtras
+  }>(null)
   useEffect(() => {
     if (tornDown || !editor) return
-    return installMcpBridge({ getCtx: () => fileCtxRef.current })
+    return installMcpBridge({
+      getCtx: () => fileCtxRef.current,
+      getComments: () => mcpAiAccessRef.current?.comments,
+      getNotes: () => mcpAiAccessRef.current?.notes,
+      getHf: () => mcpAiAccessRef.current?.hf,
+      getPageSetup: () => mcpAiAccessRef.current?.pageSetup,
+      getExtras: () => mcpAiAccessRef.current?.extras,
+    })
   }, [tornDown, editor])
 
   // Recompute the document-level line-height factor while editing:
@@ -5946,6 +5963,19 @@ export function App() {
     BLANK_BULLET_NUM_ID,
     BLANK_ORDERED_NUM_ID,
   ]
+
+  // R7: keep the MCP bridge's view of the AI document stores current. Assigned
+  // every render (no dep array) so a mid-session document switch replaces the
+  // stores before the next bridge command can observe them.
+  useEffect(() => {
+    mcpAiAccessRef.current = {
+      comments: aiCommentsAccess,
+      notes: aiNotesAccess,
+      hf: aiHfAccess,
+      pageSetup: aiPageSetupAccess,
+      extras: aiDocExtras,
+    }
+  })
 
   const ribbonActions = useStableCallbacks({
     allocateNumId: (kind: 'bullet' | 'ordered') => allocateListNumId(kind),

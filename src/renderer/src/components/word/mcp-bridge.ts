@@ -3,6 +3,9 @@ import { normalizeKeyPath } from '@shared/paths'
 import { BLANK_BULLET_NUM_ID, BLANK_ORDERED_NUM_ID } from '@genoffice/docx-engine'
 import type { McpCommandMessage, McpEditorCommand } from '../shared/ipc'
 import { executeTool, markDocSeen } from './ai/tools'
+import type { AiCommentsAccess, AiDocExtras, AiHeaderFooterAccess } from './ai/tools'
+import type { AiNotesAccess } from './ai/note-ops'
+import type { AiPageSetupAccess } from './ai/page-setup'
 import { findNumId, type NumIds } from './ai/protocol'
 import { save, type FileActionContext } from './file-actions'
 
@@ -22,6 +25,12 @@ import { save, type FileActionContext } from './file-actions'
 export interface McpBridgeDeps {
   /** live file-action context (refreshed every render by App) */
   getCtx: () => FileActionContext
+  /** document-level stores the R7 tool surface needs; wired by App, read lazily per command */
+  getComments?: () => AiCommentsAccess | undefined
+  getNotes?: () => AiNotesAccess | undefined
+  getHf?: () => AiHeaderFooterAccess | undefined
+  getPageSetup?: () => AiPageSetupAccess | undefined
+  getExtras?: () => AiDocExtras | undefined
 }
 
 function numIdsFor(ctx: FileActionContext): NumIds {
@@ -92,6 +101,54 @@ function scheduleClearAiHighlights(editor: Editor, delayMs = 10_000): void {
  */
 function mcpErrorText(output: string): string {
   return output.replaceAll('get_document_context', 'read_document')
+}
+
+/** bridge-only payload fields the shared executors do not know */
+const TRACK_KEYS = new Set(['trackChanges', 'author'])
+
+function toolInputOf(payload: unknown): Record<string, unknown> {
+  const raw = (payload ?? {}) as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw)) if (!TRACK_KEYS.has(k)) out[k] = v
+  return out
+}
+
+/**
+ * Generic passthrough for the R7 tool surface: run one built-in agent tool by
+ * its AGENT_TOOLS name against the live editor, wired with the same document
+ * stores the in-app panel hands over (comments, header/footer, page setup,
+ * styles/watermark, notes). Payload may carry the bridge-level
+ * trackChanges/author pair, stripped before the call.
+ */
+async function runAgentTool(
+  deps: McpBridgeDeps,
+  name: string,
+  payload: unknown,
+): Promise<{ summary: string; output: string; mutated: boolean }> {
+  const ctx = deps.getCtx()
+  const editor = ctx.editor
+  if (!editor || !ctx.doc) throw new Error('the document is not ready')
+  const raw = (payload ?? {}) as Record<string, unknown>
+  const track =
+    raw.trackChanges === true
+      ? { author: typeof raw.author === 'string' && raw.author ? raw.author : 'Nexus Agent' }
+      : undefined
+  const outcome = await executeTool(
+    editor,
+    { id: 'mcp', name, input: toolInputOf(payload) },
+    numIdsFor(ctx),
+    track,
+    undefined,
+    null,
+    deps.getComments?.(),
+    deps.getHf?.(),
+    undefined,
+    deps.getPageSetup?.(),
+    deps.getExtras?.(),
+    deps.getNotes?.(),
+  )
+  if (outcome.isError) throw new Error(mcpErrorText(outcome.output))
+  return { summary: outcome.summary, output: outcome.output, mutated: outcome.mutated }
 }
 
 async function runCommand(
@@ -193,34 +250,39 @@ async function runCommand(
       return { ok: true, path: input.path }
     }
 
-    case 'read_revisions': {
-      const outcome = await executeTool(
-        editor,
-        { id: 'mcp', name: 'read_revisions', input: {} },
-        numIdsFor(ctx),
-      )
-      if (outcome.isError) throw new Error(mcpErrorText(outcome.output))
-      return { summary: outcome.summary, output: outcome.output }
-    }
-
-    case 'accept_changes': {
-      const outcome = await executeTool(
-        editor,
-        { id: 'mcp', name: 'accept_changes', input: (payload ?? {}) as Record<string, unknown> },
-        numIdsFor(ctx),
-      )
-      if (outcome.isError) throw new Error(mcpErrorText(outcome.output))
-      return { summary: outcome.summary, output: outcome.output, mutated: outcome.mutated }
-    }
-
-    case 'reject_changes': {
-      const outcome = await executeTool(
-        editor,
-        { id: 'mcp', name: 'reject_changes', input: (payload ?? {}) as Record<string, unknown> },
-        numIdsFor(ctx),
-      )
-      if (outcome.isError) throw new Error(mcpErrorText(outcome.output))
-      return { summary: outcome.summary, output: outcome.output, mutated: outcome.mutated }
+    // R7: every remaining sync tool of the built-in catalog runs through the
+    // same executeTool passthrough — validation, staleness guard and error
+    // texts are the executors' own (1:1 with the in-app agent).
+    case 'read_revisions':
+    case 'accept_changes':
+    case 'reject_changes':
+    case 'read_blocks':
+    case 'replace_selection':
+    case 'read_comments':
+    case 'reply_comment':
+    case 'resolve_comment':
+    case 'add_comment':
+    case 'delete_comment':
+    case 'insert_footnote':
+    case 'insert_endnote':
+    case 'delete_note':
+    case 'read_notes':
+    case 'insert_chart':
+    case 'edit_chart':
+    case 'set_header_footer':
+    case 'set_page_setup':
+    case 'insert_section_break':
+    case 'define_style':
+    case 'list_styles':
+    case 'set_watermark':
+    case 'insert_text_box':
+    case 'insert_picture': {
+      const input = (payload ?? {}) as Record<string, unknown>
+      const result = await runAgentTool(deps, command, payload)
+      if (result.mutated && input.trackChanges !== true) {
+        scheduleClearAiHighlights(editor)
+      }
+      return result
     }
 
     default: {

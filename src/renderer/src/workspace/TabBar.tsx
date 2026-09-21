@@ -1,10 +1,12 @@
 import React from 'react'
-import { Plus, X, SplitSquareHorizontal, SplitSquareVertical, MoreHorizontal } from 'lucide-react'
+import { Plus, X, SplitSquareHorizontal, SplitSquareVertical, MoreHorizontal, MessageSquare, FileText, TerminalSquare, Globe, ListChecks } from 'lucide-react'
+import { resolveTabBarMode, type TabBarMode } from './drag-geometry'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { PaneState, SplitPosition, TabTarget } from './layout-model'
 import { getTabTitle } from './tab-registry'
 import { useLayoutStore } from './layout-store'
 import { useLinkageStore } from './linkage-store'
+import { useSessionMetaStore } from './session-meta'
 import { useDndUI } from './WorkspaceDnd'
 import { normalizeKeyPath } from '@shared/paths'
 
@@ -27,6 +29,19 @@ export function TabBar({
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [ctxMenu, setCtxMenu] = React.useState<{ tabId: string; x: number; y: number } | null>(null)
   const linkage = useLinkageStore
+  const resetLayout = useLayoutStore((s) => s.resetLayout)
+  // 分级自适应(M5):宽度驱动形态,× 永远可见
+  const barRef = React.useRef<HTMLDivElement>(null)
+  const [mode, setMode] = React.useState<TabBarMode>('comfortable')
+  React.useEffect(() => {
+    const el = barRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      setMode(resolveTabBarMode(entries[0]?.contentRect.width ?? 999))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const ctxWordPath = React.useMemo(() => {
     if (!ctxMenu) return null
     const t = pane.tabs.find((x) => x.tabId === ctxMenu.tabId)
@@ -69,6 +84,7 @@ export function TabBar({
 
   return (
     <div
+      ref={barRef}
       data-testid={`tabbar-${pane.id}`}
       className={`flex items-stretch h-9 shrink-0 border-b border-neutral-200 bg-neutral-50 select-none ${className}`}
     >
@@ -79,6 +95,7 @@ export function TabBar({
             pane={pane}
             tabId={tab.tabId}
             tabIndex={idx}
+            mode={mode}
             onContextMenuTab={(tabId, x, y) => setCtxMenu({ tabId, x, y })}
           />
         ))}
@@ -115,26 +132,30 @@ export function TabBar({
         >
           <Plus className="w-4 h-4" />
         </button>
-        <button
-          type="button"
-          aria-label="Split right"
-          data-testid={`split-right-btn-${pane.id}`}
-          title="右侧分割(新会话)"
-          onClick={() => doSplit('right')}
-          className="p-1.5 rounded hover:bg-neutral-200/70 text-neutral-500"
-        >
-          <SplitSquareHorizontal className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="Split down"
-          data-testid={`split-down-btn-${pane.id}`}
-          title="下方分割(新会话)"
-          onClick={() => doSplit('bottom')}
-          className="p-1.5 rounded hover:bg-neutral-200/70 text-neutral-500"
-        >
-          <SplitSquareVertical className="w-4 h-4" />
-        </button>
+        {mode === 'comfortable' && (
+          <>
+            <button
+              type="button"
+              aria-label="Split right"
+              data-testid={`split-right-btn-${pane.id}`}
+              title="右侧分割(新会话)"
+              onClick={() => doSplit('right')}
+              className="p-1.5 rounded hover:bg-neutral-200/70 text-neutral-500"
+            >
+              <SplitSquareHorizontal className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Split down"
+              data-testid={`split-down-btn-${pane.id}`}
+              title="下方分割(新会话)"
+              onClick={() => doSplit('bottom')}
+              className="p-1.5 rounded hover:bg-neutral-200/70 text-neutral-500"
+            >
+              <SplitSquareVertical className="w-4 h-4" />
+            </button>
+          </>
+        )}
         <div className="relative">
           <button
             type="button"
@@ -184,6 +205,18 @@ export function TabBar({
               >
                 <X className="w-3.5 h-3.5" /> 关闭此窗格
               </button>
+              <div className="my-1 border-t border-neutral-100" />
+              <button
+                type="button"
+                data-testid="menu-reset-layout"
+                className="w-full text-left px-3 py-1.5 hover:bg-neutral-100 text-neutral-600"
+                onClick={() => {
+                  setMenuOpen(false)
+                  resetLayout()
+                }}
+              >
+                重置整个布局(回到单窗格)
+              </button>
             </div>
           )}
         </div>
@@ -198,14 +231,24 @@ export type { SplitPosition, TabTarget }
  * 可拖 tab chip(§5):useDraggable(源)+ useDroppable(chip 级落点,插到它旁边)。
  * PointerSensor distance 8 保证点击选择不被拖拽吞掉;拖后 250ms 内的 click 吞掉(R15)。
  */
+const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  chat: MessageSquare,
+  word: FileText,
+  terminal: TerminalSquare,
+  browser: Globe,
+  review: ListChecks
+}
+
 function DraggableChip({
   pane,
   tabId,
+  mode = 'comfortable',
   onContextMenuTab
 }: {
   pane: PaneState
   tabId: string
   tabIndex: number
+  mode?: TabBarMode
   onContextMenuTab?: (tabId: string, x: number, y: number) => void
 }) {
   const tab = pane.tabs.find((t) => t.tabId === tabId)!
@@ -229,6 +272,7 @@ function DraggableChip({
     id: `chip:${tabId}`,
     data: { kind: 'tab-chip', paneId: pane.id, tabId }
   })
+  useSessionMetaStore((s) => s.version) // 标题元数据变化时重渲染(所见即所@)
   const justDraggedRef = React.useRef(0)
   React.useEffect(() => {
     if (drag.isDragging) justDraggedRef.current = Date.now()
@@ -256,13 +300,14 @@ function DraggableChip({
         if (isWord) clearUpdated(wordPath)
       }}
       className={[
-        'group relative flex items-center gap-1.5 pl-3 pr-2 my-1 mx-0.5 rounded-md cursor-pointer whitespace-nowrap text-xs',
+        'group relative flex items-center gap-1.5 my-1 mx-0.5 rounded-md cursor-pointer whitespace-nowrap text-xs',
+        mode === 'tiny' ? 'justify-center px-1' : 'pl-3 pr-2',
         active
           ? 'bg-white border border-neutral-300 shadow-xs text-neutral-900'
           : 'text-neutral-500 hover:bg-neutral-200/60',
         drag.isDragging ? 'opacity-30' : ''
       ].join(' ')}
-      style={{ minWidth: 96, maxWidth: 160 }}
+      style={{ minWidth: mode === 'tiny' ? 44 : 64, maxWidth: 160 }}
     >
       {pillSide && (
         <span
@@ -270,9 +315,18 @@ function DraggableChip({
           className={`absolute top-1 bottom-1 w-[3px] rounded bg-blue-500 ${pillSide === 'left' ? '-left-[3px]' : '-right-[3px]'}`}
         />
       )}
-      <span ref={drop.setNodeRef} className="truncate flex-1" title={getTabTitle(tab.target)}>
-        {getTabTitle(tab.target)}
-      </span>
+      {mode === 'tiny' ? (
+        <span ref={drop.setNodeRef} className="flex items-center" title={getTabTitle(tab.target)}>
+          {(() => {
+            const Icon = KIND_ICON[tab.target.kind] ?? MessageSquare
+            return <Icon className="w-3.5 h-3.5" />
+          })()}
+        </span>
+      ) : (
+        <span ref={drop.setNodeRef} className="truncate flex-1" title={getTabTitle(tab.target)}>
+          {getTabTitle(tab.target)}
+        </span>
+      )}
       {hasUpdate && <span data-testid={`badge-${tabId}`} className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 animate-pulse" />}
       <button
         type="button"

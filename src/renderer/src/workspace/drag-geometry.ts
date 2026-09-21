@@ -74,3 +74,17 @@ export function computeChipInsertion(
   const overCx = over.x + over.width / 2
   return dragCx < overCx ? overIndex : overIndex + 1
 }
+
+// ── 标签栏分级自适应(§5.2,M5):宽度驱动形态,× 永远可见 ──
+
+export type TabBarMode = 'comfortable' | 'narrow' | 'tiny'
+
+/** 按窗格宽度(TabBar 实测宽)解析形态:
+ *  comfortable ≥300:完整形态(标题+×+全部分割按钮)
+ *  narrow 180–299:隐藏一键分割图标(保留在 … 菜单),标题截断,× 可见
+ *  tiny <180:标题缩为图标,× 缩小仍可见 */
+export function resolveTabBarMode(width: number): TabBarMode {
+  if (width >= 300) return 'comfortable'
+  if (width >= 180) return 'narrow'
+  return 'tiny'
+}

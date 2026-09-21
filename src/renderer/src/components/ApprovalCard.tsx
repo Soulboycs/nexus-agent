@@ -18,6 +18,16 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
   const isCommand = ['Bash', 'run_command', 'bash', 'PowerShell'].includes(request.toolName)
   const commandStr = isCommand ? String(request.arguments.command || '') : ''
 
+  // R6/R7 AskUserQuestion 选项渲染（1:1 cc 权限组件）：选择后经 updatedInput.answers 回填
+  const questions: Array<{
+    question: string
+    header: string
+    options: Array<{ label: string; description?: string }>
+  }> = Array.isArray(request.arguments?.questions) ? request.arguments.questions : []
+  const isAskUserQuestion = request.toolName === 'AskUserQuestion' && questions.length > 0
+  const [selections, setSelections] = useState<Record<string, string>>({})
+  const allAnswered = isAskUserQuestion && questions.every((q) => selections[q.question])
+
   /**
    * Approve, optionally with user-edited args (1:1 Claude Code updatedInput).
    * Only send updatedInput when the parsed JSON actually differs from the
@@ -43,6 +53,13 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
   }
 
   const handleApprove = () => {
+    // AskUserQuestion：把选择题答案作为 updatedInput.answers 回填（1:1 cc）
+    if (isAskUserQuestion) {
+      const missing = questions.find((q) => !selections[q.question])
+      if (missing) return // 必须全部作答
+      onRespond(true, undefined, { answers: selections })
+      return
+    }
     const updatedInput = buildUpdatedInput()
     if (updatedInput === null) return // invalid JSON — block approval
     onRespond(true, undefined, updatedInput)
@@ -69,13 +86,49 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
             {request.promptMessage}
           </p>
 
+          {/* AskUserQuestion 选项渲染（1:1 cc 权限组件） */}
+          {isAskUserQuestion && (
+            <div className="space-y-3 mb-3">
+              {questions.map((q) => (
+                <div key={q.question} className="border border-neutral-200 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                      {q.header}
+                    </span>
+                  </div>
+                  <div className="text-xs font-medium text-neutral-800 mb-2">{q.question}</div>
+                  <div className="space-y-1.5">
+                    {q.options.map((opt) => {
+                      const selected = selections[q.question] === opt.label
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => setSelections((prev) => ({ ...prev, [q.question]: opt.label }))}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                            selected
+                              ? 'bg-blue-50 border-blue-400 text-blue-800'
+                              : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                          }`}
+                        >
+                          <div className="font-medium">{opt.label}</div>
+                          {opt.description && <div className="text-[11px] text-neutral-500 mt-0.5">{opt.description}</div>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Details / Arguments (read-only view) */}
-          {isCommand && !showArgsEditor ? (
+          {isCommand && !showArgsEditor && !isAskUserQuestion ? (
             <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-2.5 mb-3 font-mono text-xs text-emerald-400 overflow-x-auto flex items-center gap-2 shadow-inner">
               <Terminal className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
               <span>{commandStr}</span>
             </div>
-          ) : !showArgsEditor ? (
+          ) : !showArgsEditor && !isAskUserQuestion ? (
             <div className="bg-neutral-50 rounded-lg border border-neutral-200 p-2.5 mb-3 font-mono text-xs text-neutral-800 max-h-36 overflow-y-auto">
               <pre>{JSON.stringify(request.arguments, null, 2)}</pre>
             </div>
@@ -124,7 +177,9 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({ request, onRespond }
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Approve & Continue</span>
+              <span>
+                {isAskUserQuestion ? (allAnswered ? 'Submit Answers' : 'Answer all questions first') : 'Approve & Continue'}
+              </span>
             </button>
 
             <button

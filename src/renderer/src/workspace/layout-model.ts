@@ -570,7 +570,7 @@ function isValidTarget(t: unknown): t is TabTarget {
   if (typeof t !== 'object' || t === null) return false
   const o = t as Record<string, unknown>
   if (o.kind === 'chat') return typeof o.sessionId === 'string' && o.sessionId.length > 0
-  if (o.kind === 'word') return typeof o.path === 'string' && o.path.length > 0
+  if (o.kind === 'word') return typeof o.path === 'string'
   if (o.kind === 'new_tab' || o.kind === 'terminal' || o.kind === 'review') return true
   if (o.kind === 'browser') return o.startUrl === undefined || typeof o.startUrl === 'string'
   return false

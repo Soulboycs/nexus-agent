@@ -219,9 +219,14 @@ export interface ZoteroRendererResponse {
 /**
  * MCP bridge: an editor command pushed from the shell main process into a docs
  * tab so an external agent drives the *visible* editor instead of writing a file
- * behind it. `insert_content` / `replace_blocks` / `apply_ops` / `read_document`
- * reuse the built-in agent's tool executors; `save_document` writes the live
- * document to an explicit path.
+ * behind it. Commands run through the built-in agent's tool executors
+ * (`executeTool`), inheriting the same parsing, atomicity, formatting rules and
+ * stale-index guard; `save_document` writes the live document to an explicit
+ * path. `read_document` is the bridge name of the in-app `get_document_context`
+ * tool. R7: the surface covers every sync tool of the built-in AGENT_TOOLS
+ * catalog; the async/cloud five (web_search / image_search / insert_image /
+ * generate_image / create_document) and streaming write_document are served by
+ * the main-process agent, not the live bridge.
  */
 export type McpEditorCommand =
   | 'insert_content'
@@ -232,6 +237,66 @@ export type McpEditorCommand =
   | 'read_revisions'
   | 'accept_changes'
   | 'reject_changes'
+  | 'read_blocks'
+  | 'replace_selection'
+  | 'read_comments'
+  | 'reply_comment'
+  | 'resolve_comment'
+  | 'add_comment'
+  | 'delete_comment'
+  | 'insert_footnote'
+  | 'insert_endnote'
+  | 'delete_note'
+  | 'read_notes'
+  | 'insert_chart'
+  | 'edit_chart'
+  | 'set_header_footer'
+  | 'set_page_setup'
+  | 'insert_section_break'
+  | 'define_style'
+  | 'list_styles'
+  | 'set_watermark'
+  | 'insert_text_box'
+  | 'insert_picture'
+
+/**
+ * Runtime mirror of {@link McpEditorCommand}: the mcp-bridge switch is
+ * exhaustively typed against the union (its default branch is `never`), and
+ * this array lets tests pin the two together without importing the bridge
+ * (which pulls the whole editor). Keep in sync with the union — the contract
+ * test `tests/r7McpBridgeCommands.test.ts` fails on drift.
+ */
+export const MCP_EDITOR_COMMANDS = [
+  'insert_content',
+  'replace_blocks',
+  'apply_ops',
+  'read_document',
+  'save_document',
+  'read_revisions',
+  'accept_changes',
+  'reject_changes',
+  'read_blocks',
+  'replace_selection',
+  'read_comments',
+  'reply_comment',
+  'resolve_comment',
+  'add_comment',
+  'delete_comment',
+  'insert_footnote',
+  'insert_endnote',
+  'delete_note',
+  'read_notes',
+  'insert_chart',
+  'edit_chart',
+  'set_header_footer',
+  'set_page_setup',
+  'insert_section_break',
+  'define_style',
+  'list_styles',
+  'set_watermark',
+  'insert_text_box',
+  'insert_picture',
+] as const satisfies readonly McpEditorCommand[]
 
 export interface McpCommandMessage {
   requestId: string
@@ -282,6 +347,8 @@ export interface DesktopApi {
   onZoteroRequest(handler: (request: ZoteroRendererRequest) => void): () => void
   respondToZotero(response: ZoteroRendererResponse): void
   openDocx(): Promise<OpenDocxResult>
+  /** 仅弹文件选择框返回路径(word pane 工具条) */
+  pickDocxPath?(): Promise<string | null>
   openDocxPath(path: string): Promise<OpenDocxResult>
   /** decrypt-and-open a password-protected docx (path from a needsPassword result) */
   openDocxDecrypt(path: string, password: string): Promise<DecryptOpenResult>

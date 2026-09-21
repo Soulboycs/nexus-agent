@@ -14,11 +14,14 @@ import { logger } from './utils/logger'
 import { registerDocxIpc } from './docx/docxIpc'
 import { isDocsEditorReady } from './docx/docsBridge'
 import { setDocsEditorReadyProbe } from './agent/utils/runtimeContext'
+import { registerCronRunner } from './agent/tools/cronTools'
 
 // E2E 隔离:GUI 测试传入独立 userData,避免污染真实用户数据/布局
 if (process.env.NEXUS_TEST_USERDATA) {
   app.setPath('userData', process.env.NEXUS_TEST_USERDATA)
 }
+try { require('fs').appendFileSync('D:/Agent/tests/gui/.main-debug.log', `[boot] env=${process.env.NEXUS_TEST_USERDATA || 'none'} userData=${app.getPath('userData')}
+`) } catch {}
 
 app.disableHardwareAcceleration()
 app.commandLine.appendSwitch('no-sandbox')
@@ -262,6 +265,8 @@ function createWindow(): void {
   }
 }
 
+let cronRunnerRegistered = false
+
 async function initAgent() {
   const config = await loadConfig()
   // P3 dynamic descriptions: providers consult this probe (electron-free
@@ -270,10 +275,25 @@ async function initAgent() {
   sessionManager = new SessionManager({
     createEngine: () => {
       if (!pendingCreateCtx) throw new Error('Engine factory invoked without create context')
+      // R7 Cron：到点且默认会话空闲时把 prompt 作为新用户回合提交（注册一次）
+      if (!cronRunnerRegistered) {
+        cronRunnerRegistered = true
+        registerCronRunner(pendingCreateCtx.workspaceRoot, async (prompt) => {
+          const sm = sessionManager
+          if (!sm) return
+          try {
+            await sm.run('cron-scheduled', prompt)
+          } catch (err) {
+            // 会话忙 → 本轮跳过（fail-closed，不中断正在跑的回合）
+            console.log('[cron] scheduled prompt skipped:', (err as Error).message)
+          }
+        })
+      }
       return adaptEngine(
         createDefaultAgentEngine({
           workspaceRoot: pendingCreateCtx.workspaceRoot,
           providerConfig: pendingCreateCtx.providerConfig,
+          customProvider: pendingCreateCtx.customProvider,
           docConflict: docConflicts
         })
       )
